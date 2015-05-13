@@ -1,0 +1,114 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{a4wide}
+\usepackage{JohnMath}
+
+\usepackage[svgnames]{xcolor}
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Black},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\renewcommand{\arraystretch}{1.2}
+
+\renewcommand{\true}{\mathsf{tt}}
+\renewcommand{\emp}{\emph{emp}}
+
+\title{Separation Algebras}
+\author{John Wickerson}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+A separation algebra (SA) is a structure $(M, ∘, U)$ such that for some $\top ∉ M$:
+\begin{itemize}
+\item $∘ ∈ M^\top × M^\top → M^\top$
+\item $U⊆M$
+\item $∀x∈M^\top．\top ∘ x = \top$ 
+\item $∀m∈M．∃u∈U．u ∘ m = m$
+\item $∀x,y,z∈M^\top．(x ∘ y) ∘ z = x ∘ (y ∘ z)$
+\item $∀x,y∈M^\top．x ∘ y = y ∘ z$
+\item $∀x_1,x_2,y∈M^\top．x_1 ∘ y = x_2 ∘ y ≠ \top ⇒ x_1 = x_2$
+\end{itemize}
+Adapted from Dockins et al.:
+
+\begin{defn}
+Given a set $M$ we can construct the flat SA $M_\bot$ like so:
+\[
+M_\bot \eqdef (M\uplus\{\bot\}, ∘, \{\bot\})
+\]
+where:
+\[
+m ∘ m \eqdef \begin{cases} m'  & \text{if $m = \bot$} \\ m  & \text{if $m' = \bot$} \\ \top & \text{otherwise} \end{cases}
+\] 
+\end{defn}
+
+\begin{defn}
+Given an SA $S = (M, ∘_S, U)$, we can construct the discrete SA $S_=$ like so:
+\[
+S_= \eqdef (M, ∘, M)
+\]
+where
+\[
+m ∘_= m' \eqdef \begin{cases} m  & \text{if $m = m'$} \\ \top & \text{otherwise} \end{cases}
+\] 
+\end{defn}
+
+\begin{defn}
+Given SAs $S_1 = (M, ∘_1, U_1)$ and $S_2 = (N, ∘_2, U_2)$ we can construct the product SA $S_1 × S_2$ like so:
+\[
+S_1 × S_2 \eqdef (M×N, ∘, U_1 × U_2)
+\]
+where
+\[
+(m,n) ∘ (m',n') \eqdef \begin{cases} (m ∘_1 m', n ∘_2 n') & \text{if $m ∘_1 m' ≠ \top$ and $n ∘_2 n' ≠ \top$} \\ \top & \text{otherwise} \end{cases}
+\]
+\end{defn}
+
+\begin{defn}
+Given a set $M$ and an SA $S = (N, ∘_S, U_S)$ we can construct the finite function SA $M →_{\rm fin} S = (M→_{\rm fin}N, ∘, U)$, where
+\[
+\begin{array}{rcl}
+M →_{\rm fin} N &\eqdef& \{f ∈ M→N \mid \mathop{\rm finite}(f^{-1}\, U_N)\} \\
+f_1 ∘ f_2 &\eqdef& \begin{cases} λm∈M．f_1\,m ∘_S f_2\,m & \text{if $∀m∈M．f_1\,m ∘_S f_2\,m ≠ \top$} \\ \top & \text{otherwise} \end{cases} \\
+U &\eqdef& \{f\mid ∀m∈M．f\,m ∈ U_S\}
+\end{array}
+\]
+\end{defn}
+
+\noindent A state is an element of a finite function SA from naturals to the flat SA of integers. A world is an element of the product SA comprising a state together with a discretised finite function SA from region names to states. 
+\[
+\begin{array}{lclcl}
+l,s &∈& {\sf State} &\eqdef& \mathbb N →_{\rm fin} \mathbb Z_{\bot} \\
+w &∈& {\sf World} &\eqdef& {\sf State} × ({\sf RName} →_{\rm fin} {\sf State})_=
+\end{array}
+\]
+
+\begin{remark}
+This isn't quite right -- in fact the local state and each of the shared states must be pairwise disjoint.
+\end{remark}
+
+\end{document}

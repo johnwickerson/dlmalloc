@@ -1,0 +1,98 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{JohnMath}
+
+\title{Reasoning about directed graphs \\ using separation logic}
+\author{John Wickerson}
+\date{8th January 2010}
+
+\begin{document}
+
+\maketitle
+
+Consider a datastructure that contains a set of nodes $X$. Each node $x∈X$ comprises three fields: a value $x.{\tt val}$ and two (possibly null) pointers $x.{\tt next1}$ and $x.{\tt next2}$ to other nodes. 
+
+\section{Trees and lists}
+
+\newcommand{\Tree}{\opit{tree}}
+\newcommand{\List}[1][]{{\opit{list}}_{#1}}
+
+Suppose there are no cycles, and that there is a single root node $r$ from which all nodes can be reached. Suppose further that {\tt next1} and {\tt next2} always identify disjoint graphs. Then the structure would be a \emph{tree}, and we could describe it as $\Tree(r)$, where $\Tree$ is the strongest predicate that satisfies:
+\[
+\Tree(x) ⇔ \begin{array}[t]{@{}l}x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y,z．x.{\tt val}↦\underscore \begin{array}[t]{@{}l} {} * x.{\tt next1}↦y * \Tree(y) {}\\{} * x.{\tt next2}↦z * \Tree(z)\end{array}\end{array}
+\]
+Now suppose again there are no cycles, and that $r$ is again the root. Suppose further that {\tt next2} is always null. Then the structure would be a list, and we could describe it as $\List(r)$, where $\List$ is the strongest predicate that satisfies:
+\[
+\List(x) ⇔ x=0 ∧ \emp ∨ x≠0 ∧ ∃y．x.{\tt val}↦\underscore * x.{\tt next1}↦y * \List(y)
+\]
+In both of these cases we are able to find an \emph{inductively-defined} predicate to describe the structure. However, we cannot describe in this way structures that contain cycles or node-sharing, because the separating conjunction that we use enforces that the subcomponents be disjoint.
+
+\section{Dags}
+
+\newcommand{\Dag}{\opit{dag}}
+
+Matt suggests describing a dag rooted at $r$ as $\Dag(r)$, where $\Dag$ is the strongest predicate that satisfies:
+\[
+\Dag(x) ⇔ \begin{array}[t]{@{}l}x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y,z,P．x.{\tt val}↦\underscore \begin{array}[t]{@{}l} {} * x.{\tt next1}↦y * (P\magicwand\Dag(y)) {}\\{} * x.{\tt next2}↦z * (P\magicwand\Dag(z)) {}\\{} * P \end{array}\end{array}
+\]
+Here, $P$ represents the part of the graph that is shared between the two children. Note that the predicate is, pleasingly, precise: it describes only the heap cells of the dag.
+
+\section{Directed graphs}
+
+\newcommand{\Node}[1][]{{\opit{node}}_{#1}}
+\newcommand{\Graph}{\opit{graph}}
+
+We can describe our most general graph structure as $\Graph(X)$, where $X$ is the set of nodes (defined above) and $\Graph$ is defined like so:
+\[
+\Graph(X) ≝ ∀^*x∈X．\Node[X](x)
+\]
+There's no particular ordering between the nodes in $X$. We just use the iterated star ($∀^*$) to iterate over all of them, and say that each one is a $\Node$. We define $\Node[X]$ like so:
+\[
+\Node[X](x) ≝ ∃y,z．x.{\tt val}↦\underscore \begin{array}[t]{@{}l} {} * (x.{\tt next1}↦y ∧ y∈X_⊥) {}\\{} * (x.{\tt next2}↦z ∧ z∈X_⊥)\end{array}
+\]
+where $X_⊥≝X∪\{0\}$. Note that the $\Node$ predicate, unlike the others, is not inductively defined. This is because the datastructure is not inductive either.
+
+Even though the predicate is not inductive, we can still reason using the predicate perfectly nicely. Note the following lemmas:
+
+\begin{lemma}\label{lem:node_mono}
+If $X⊆X'$ then $\Node[X](x) ⇒ \Node[X'](x)$.
+\end{lemma}
+
+\begin{lemma}[Merging two (disjoint) graphs]
+\[\Graph(X) * \Graph(Y) ⇒ \Graph(X\disjunion Y)\]
+\end{lemma}
+\begin{proof}
+\[
+\begin{array}{rll}
+\Graph(X) * \Graph(Y) &⇔ ∀^*x∈X．\Node[X](x) * ∀^*x∈Y．\Node[Y](x) \\
+&⇒ ∀^*x∈X．\Node[X\disjunion Y](x) * ∀^*x∈Y．\Node[X\disjunion Y](x) & \text{(by Lemma~\ref{lem:node_mono})} \\
+&⇔ ∀^*x∈X\disjunion Y．\Node[X\disjunion Y](x) \\
+&⇔ \Graph(X\disjunion Y)
+\end{array}
+\]
+Note that the converse doesn't hold because the RHS allows edges between nodes in $X$ and nodes in $Y$, but the LHS doesn't.
+\end{proof}
+
+The next lemma is for the case when we have a graph and an external node (that points into the graph) that we wish to add in.
+
+\begin{lemma}[Adding a new node]
+If $y∉X$ then 
+\[
+\Graph(X) * \Node[X](y) ⇒ \Graph(X\disjunion\{y\})
+\]
+\end{lemma}
+\begin{proof}
+\[
+\begin{array}{rll}
+\Graph(X) * \Node[X](y) &⇔ (∀^*x∈X．\Node[X](x)) * \Node[X](y) \\
+&⇒ (∀^*x∈X．\Node[X\disjunion\{y\}](x)) * \Node[X\disjunion\{y\}](y) \\
+&⇒ ∀^*x∈X\disjunion\{y\}．\Node[X\disjunion\{y\}](x)
+\end{array}
+\]
+Note that the converse doesn't hold because the RHS allows edges to $y$ from nodes in $X$, but the LHS doesn't.
+\end{proof}
+
+Note that this predicate doesn't cater at all for cyclicity. That is to say, I see no elegant way to adapt the $\Graph$ predicate to describe a dag.
+
+
+\end{document}

@@ -1,0 +1,641 @@
+\documentclass[10pt,a4paper,twoside]{report}
+\usepackage{a4wide}
+
+\usepackage{JohnMath}
+
+\usepackage[svgnames]{xcolor}
+\usepackage{MnSymbol}
+
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Purple},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\newcommand{\checkthis}{$^{\rm [check\ this]}$}
+\renewcommand{\floor}[2][]{\left\lfloor{#2}\right\rfloor_{#1}}
+\renewcommand{\ceil}[2][]{\left\lceil{#2}\right\rceil_{#1}}
+\newcommand{\floorpow}[1]{\llfloor{#1}\rrfloor}
+\newcommand{\fracpow}[1]{\{\hspace{-3pt}\{{#1}\}\hspace{-3pt}\}}
+
+% STATUS FLAGS
+\newcommand{\setC}{\raisebox{1.5pt}{$\blacktriangledown$}}
+\newcommand{\unsetC}{\raisebox{1.5pt}{$\triangledown$}}
+\newcommand{\setP}{{\blacktriangle}}
+\newcommand{\unsetP}{{\triangle}}
+
+% BIT OPERATIONS
+\newcommand{\AND}{\mathbin{\texttt{\&}}}
+\newcommand{\OR}{\mathbin{\texttt{|}}}
+\newcommand{\NOT}{\mathbin{\textasciitilde}}
+\newcommand{\SHIFTRIGHT}{\mathbin{\texttt{>}\hspace{-1pt}\texttt{>}}}
+\newcommand{\SHIFTLEFT}{\mathbin{\texttt{<}\hspace{-1pt}\texttt{<}}}
+
+\title{A proof of Doug Lea's memory manager}
+\author{John Wickerson}
+\date{}
+
+\begin{document}
+
+\maketitle
+\pagestyle{headings}
+
+\chapter{Glossary of macros, typedefs and minor routines}\label{chap:glossary}
+
+\renewcommand{\arraystretch}{1.2}
+
+\begin{tt}
+\begin{tabular}{l@{ $=$ }L}
+MALLOC\_ALIGNMENT & 8 \\
+MAX\_SIZE\_T & FFFF\ FFFF_h \\
+SIZE\_T\_SIZE & 4 \\
+SIZE\_T\_BITSIZE & 32 \\
+SIZE\_T\_ZERO & 0 \\
+SIZE\_T\_ONE & 1 \\
+SIZE\_T\_TWO & 2 \\
+SIZE\_T\_FOUR & 4 \\
+TWO\_SIZE\_T\_SIZES & 8 \\
+FOUR\_SIZE\_T\_SIZES & 16 \\
+SIX\_SIZE\_T\_SIZES & 24 \\
+HALF\_MAX\_SIZE\_T & 7FFF\ FFFF_h \\
+CHUNK\_ALIGN\_MASK & 111_b \\
+mchunk & \text{struct malloc\_chunk} \\
+mchunkptr & \text{mchunk*} \\
+sbinptr & \text{mchunk*} \\
+bindex\_t & \text{unsigned int} \\
+binmap\_t & \text{unsigned int} \\
+flag\_t & \text{unsigned int} \\
+MCHUNK\_SIZE & 16 \\
+CHUNK\_OVERHEAD & 4 \\
+MIN\_CHUNK\_SIZE & 16 \\
+chunk2mem(p) & {\tt p} + 8 \\
+mem2chunk(mem) & {\tt mem} - 8 \\
+MAX\_REQUEST & 2^{32}-63 \\
+MIN\_REQUEST & 11 \\
+pad\_request(req) & \ceil[8]{{\tt req}+4} \\
+request2size(req) & \max\{16, \ceil[8]{{\tt req}+4}\} \\
+\end{tabular}
+
+\begin{tabular}{l@{ $=$ }L}
+PINUSE\_BIT & 1_b \\
+CINUSE\_BIT & 10_b \\
+FLAG4\_BIT & 100_b \\
+INUSE\_BITS & 11_b \\
+FLAG\_BITS & 111_b \\
+cinuse(p) & flags({\tt p}) = \setC\_ \\
+pinuse(p) & flags({\tt p}) = \_\setP \\
+is\_inuse(p) & flags({\tt p}) ∈ \{\setC\_ , \unsetC\unsetP\}  \\
+is\_mmapped(p) & flags({\tt p}) = \unsetC\unsetP \\
+chunksize(p) & size({\tt p}) \\
+\Seqspec{flags({\tt p}) = C\_}{clear\_pinuse(p)}{flags({\tt p}) = C\unsetP} \\
+chunk\_plus\_offset(p,s) & p + s \\
+chunk\_minus\_offset(p,s) & p - s \\
+next\_chunk(p) & next({\tt p}) \\
+prev\_chunk(p) & prev({\tt p}) \\
+next\_pinuse(p) & flags(next({\tt p})) = \_\setP \\
+get\_foot(p,s) & prev\_foot({\tt p} + {\tt s}) \\
+\Seqspec{prev\_foot({\tt p} + {\tt s}) = \_ }{set\_foot(p,s)}{prev\_foot({\tt p} + {\tt s}) = {\tt s}} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p})=\_\_ {}\\{} ∧ prev\_foot({\tt p}+{\tt s})=\_}{set\_size\_and\_pinuse\_of\_free\_chunk(p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p})=\unsetC\setP {}\\{} ∧ prev\_foot(next({\tt p}))={\tt s}} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p})=\_\_ {}\\{} ∧ prev\_foot({\tt p}+{\tt s})=\_ {}\\{} ∧ flags({\tt p}+{\tt s})=\_\_}{set\_free\_with\_pinuse(p,s,n)}{size({\tt p})={\tt s} ∧ flags({\tt p})=\unsetC\setP {}\\{} ∧ prev\_foot(next({\tt p}))={\tt s} {}\\{} ∧ flags(next({\tt p}))=\_\unsetP} \\
+tchunk & \text{malloc\_tree\_chunk} \\
+tchunkptr & \text{tchunk*} \\
+tbinptr & \text{tchunk*} \\
+leftmost\_child(t) & \left\{\begin{array}{ll}child_0({\tt *t}) & \textrm{if $child_0({\tt *t}) ≠ 0$} \\ child_1({\tt *t}) & \textrm{otherwise}\end{array}\right. \\
+NSMALLBINS & 32 \\
+NTREEBINS & 32 \\
+SMALLBIN\_SHIFT & 3 \\
+SMALLBIN\_WIDTH & 8 \\
+TREEBIN\_SHIFT & 8 \\
+MIN\_LARGE\_SIZE & 256 \\
+MAX\_SMALL\_SIZE & 255 \\
+MAX\_SMALL\_REQUEST & 244 \\
+mstate & \text{struct malloc\_state} \\
+mparams & \text{struct malloc\_params} \\
+is\_small(s) & {\tt s} < 256 \\
+small\_index(s) & \floor{{\tt s}/8} \\
+small\_index2size(i) & 8×{\tt i} \\
+MIN\_SMALL\_INDEX & 2 \\
+\end{tabular}
+
+\begin{tabular}{l@{ $=$ }L}
+\Seqspec{{\tt smallbins}[2{\tt i}+2]↦C_1 * {\tt smallbins}[2{\tt i}+3]↦C_2}{x := smallbin\_at(M,i)}{{\tt x}.{\tt fd} ↦ C_1 * {\tt x}.{\tt bk} ↦ C_2} \\
+treebin\_at(M,i) & {\tt treebins}[{\tt i}] \\
+\Seqspec{{\tt I}=\_}{compute\_tree\_index(S,I)}{{\tt I}=\left\{\begin{array}{ll} 0 & \textrm{if ${\tt S}<256$} \\ 31 & \textrm{if ${\tt S}>2^{24}$} \\ 2(\log_2{\floorpow{{\tt S}}-8}) & \textrm{if $0≤\fracpow{{\tt S}} < \tfrac{1}{2}\floorpow{{\tt S}}$} \\ 2(\log_2{\floorpow{{\tt S}}-8})+1 & \textrm{if $\tfrac{1}{2}\floorpow{{\tt S}} ≤\fracpow{{\tt S}} < \floorpow{{\tt S}}$} \end{array}\right.}\\ 
+bin\_for\_tree\_index(i) & \left\{\begin{array}{ll}31 & \textrm{if ${\tt i}=31$} \\ \floor{{\tt i}/2}+6 & \textrm{otherwise}\end{array}\right. \\
+leftshift\_for\_tree\_index(i) & \left\{\begin{array}{ll}0 & \textrm{if ${\tt i}=31$} \\ 25-\floor{{\tt i}/2} & \textrm{otherwise}\end{array}\right. \\
+minsize\_for\_tree\_index(i) & \left\{\begin{array}{ll}2 \SHIFTLEFT (\floor{{\tt i}/2}+7) & \textrm{if ${\tt i}$ even} \\ 3 \SHIFTLEFT (\floor{{\tt i}/2}+7) & \textrm{if ${\tt i}$ odd}\end{array}\right. \\
+idx2bit(i) & 1 \SHIFTLEFT {\tt i} \\
+\Seqspec{{\tt smallmap}[{\tt i}]=\_}{mark\_smallmap(M,i)}{{\tt smallmap}[{\tt i}]=1} \\
+\Seqspec{{\tt smallmap}[{\tt i}]=\_}{clear\_smallmap(M,i)}{{\tt smallmap}[{\tt i}]=0} \\
+smallmap\_is\_marked(M,i) & {\tt smallmap}[{\tt i}]=1 \\
+\Seqspec{{\tt treemap}[{\tt i}]=\_}{mark\_treemap(M,i)}{{\tt treemap}[{\tt i}]=1} \\
+\Seqspec{{\tt treemap}[{\tt i}]=\_}{clear\_treemap(M,i)}{{\tt treemap}[{\tt i}]=0} \\
+treemap\_is\_marked(M,i) & {\tt treemap}[{\tt i}]=1 \\
+least\_bit(x) & \left\{\begin{array}{ll}\mathbf{0} \stackrel{i}{1}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if {\tt x}=0} \end{array}\right. \\
+left\_bits(x) & \left\{\begin{array}{ll}\mathbf{1} \stackrel{i}{0}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if ${\tt x}=0$}\end{array}\right. \\
+same\_or\_left\_bits(x) & \left\{\begin{array}{ll}\mathbf{1} \stackrel{i}{1}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if ${\tt x}=0$}\end{array}\right. \\
+\Seqspec{{\tt I}=\_}{compute\_bit2idx(X,I)}{{\tt X≠0} ⇒ {\tt I}=\log_2 {\tt X}} \\
+\Seqspec{p}{mark\_inuse\_foot(M,p,s)}{p} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p}) = \_P {}\\{} ∧ flags({\tt p}+{\tt s}) = C\_ }{set\_inuse(M,p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p}) = \setC P {}\\{} ∧ flags(next({\tt p})) = C\setP } \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p}) = \_\_ {}\\{} ∧ flags({\tt p}+{\tt s}) = C\_ }{set\_inuse\_and\_pinuse(M,p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p}) = \setC\setP {}\\{} ∧ flags(next({\tt p})) = C\setP } \\
+\Seqspec{size({\tt p})=\_ {}\\{} ∧ flags({\tt p}) = \_\_}{set\_inuse\_and\_pinuse\_of\_inuse\_chunk(M,p,s)}{size({\tt p})={\tt s} {}\\{} ∧ flags({\tt p}) = \setC\setP} \\
+\end{tabular}
+\end{tt}
+
+\chapter{Describing chunks}\label{sect:describing_chunks}
+
+\newcommand{\fd}[1][]{{\stackrel{{#1}}{\lcurvearrowright}}}
+\newcommand{\bk}{{\lcurvearrowleft}}
+\newcommand{\fdbk}[1][]{{\smash{\stackrel{{\raisebox{6pt}{{{\scriptsize {$#1$}}}}}}{{\smash{\ensuremath{\raisebox{-2pt}{$\bk$}\hspace{-8pt}\raisebox{2pt}{$\fd$}}}}}}}}
+
+Define
+\[
+\begin{array}{rcl}
+C_1 \fd C_2 &⇔& C_1.{\tt fd}↦C_2 \\
+C_1 \fd[S] C_2 &⇔& C_1.{\tt fd}↦C_2 * ∃S'．C_1.size\pto[.5]S' * S'\dot{≥}S\\
+C_1 \bk C_2 &⇔& C_2.{\tt bk}↦C_1 \\
+C_1 \fdbk C_2 &⇔&C_1 \fd C_2 * C_1 \bk C_2 \\
+C_1 \fdbk[S] C_2 &⇔&C_1 \fd[S] C_2 * C_1 \bk C_2 \\
+C_1 \fdbk^* C_2 &⇔& C_1 \dot= C_2 ∨ ∃C'．C_1\fdbk C' * C'\fdbk^* C_2 \\
+C_1 \fdbk[S]^* C_2 &⇔& C_1 \dot= C_2 ∨ ∃C'．C_1\fdbk[S] C' * C'\fdbk[S]^* C_2 \\
+\end{array}
+\]
+
+We begin by tackling a simplified scenario, in which we ignore treebins. Assume chunks have sizes that are multiples of 8 bytes up to 256 bytes (exclusive). All free chunks are thus contained in one of 32 smallbins. We shall also ignore the smallmap for now.
+
+\[
+\begin{array}{rcl}
+node_S(C) &⇔& busynode_S(C) ∨ freenode_S(C) \\
+busynode_S(C) &⇔& \ml{∃S',C_n．{}\\{}
+* C.cinuse↦1 {}\\{}
+* C.size↦S' * S'\dot{≥}S {}\\{}
+* C_n\dot=C{+}S' {}\\{}
+* node_0(C_n)  {}\\{}
+* C_n.pinuse↦1} \\
+freenode_S(C) &⇔& \ml{∃S',C_n．{}\\{}
+* C.cinuse↦0 {}\\{}
+* C.size\pto[.5]S' * S'\dot{≥}S {}\\{}
+* snode_S(C) {}\\{}
+* C_n\dot=C{+}S' {}\\{}
+* busynode_0(C_n) {}\\{}
+* C_n.prevfoot↦S'  {}\\{}
+* C_n.pinuse↦0} \\
+snode_S(C) &⇔& ∃C'{≠}C．C\fdbk[S] C' * C' \fdbk[S]^* C \\
+sbinheader_S(B) &⇔& \ml{B\fdbk B ∨ ∃C{≠}B．B\fdbk C * C \fdbk[S]^* B}
+\end{array}
+\]
+
+If {\tt start} is the address of the first chunk in the arena, then the entire state can be described by:
+\[
+node_0({\tt start}) * ∀^*i∈[2,32)．sbin_{8i}({\tt smallbins}+2i)
+\]
+TODO: 
+\begin{itemize}
+\item make a special case for the first node (its PINUSE flag should be permanently set)
+\end{itemize}
+
+\chapter{Operations on smallbins and trees}\label{chap:smallbins_and_trees}
+
+Then let
+\[
+\begin{array}{rcl}
+sbinempty(B) &⇔& B \fdbk B\\
+sbinnonempty(S,B) &⇔& ∃C{≠}B．B\fdbk C * C \fdbk[S]^* B \\
+sbin(S,B) &⇔& sbinempty(B) ∨ sbinnonempty(S,B) \\
+\end{array}
+\]
+The following predicate describes a valid {\tt smallbins} array and corresponding {\tt smallmap} vector.
+\[
+\begin{array}{rcl}
+sbinAndMap(i) &⇔& ∃S,B．\begin{array}[t]{l} i\dot{∈}[2,32) * S\dot=8i * B\dot={\tt smallbins}{+}2i * {}\\{}
+(\amp{\tt smallmap}_i↦0 * sbinempty(B) {}\\{}
+∨ \amp{\tt smallmap}_i↦1 * sbinnonempty(S,B)) \end{array} \\
+sbinsOK &⇔& ∀^*i∈[2,32)．sbinAndMap(i)
+\end{array}
+\]
+The {\tt insert\_small\_chunk} macro can be specified like so. Note that it preserves the $sbinsOK$ predicate:
+\[
+\seqspec{\exists i．i\dot{∈}[2,32) * {\tt S}\dot=8i * {\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * sbinsOK}{insert\_small\_chunk(M,P,S)}{sbinsOK}
+\]
+The details are as follows. 
+\begin{lstlisting}
+£\ass{\exists i．i\dot{∈}[2,32) * {\tt S}\dot=8i * {\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * sbinsOK}£
+bindex_t I  = small_index(S);
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * sbinsOK * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I}}£
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * sbinAndMap({\tt I}) * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I}}£
+mchunkptr B = smallbin_at(M, I);
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * sbinAndMap({\tt I}) * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I}}£
+mchunkptr F = B;
+assert(S >= MIN_CHUNK_SIZE);
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * sbinAndMap({\tt I}) {}\\{} 
+* {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt F}\dot= {\tt B}}£
+if (!smallmap_is_marked(M, I))
+  £\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦0 * sbinempty({\tt B}) {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt F}\dot= {\tt B}}£
+  mark_smallmap(M, I);
+  £\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * sbinempty({\tt B}) {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt F}\dot= {\tt B}}£
+  £\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fdbk{\tt F} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt F}\dot= {\tt B} * {\tt B}\dot{≠}{\tt P}}£
+else if (RTCHECK(ok_address(M, B->fd)))
+  £\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * sbinnonempty({\tt S}, {\tt B}) {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I}}£
+  £\ass{∃C{≠}{\tt B}．{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fdbk C * C\fdbk[{\tt S}]^* {\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+  F = B->fd;
+  £\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fdbk{\tt F} * {\tt F}\fdbk[{\tt S}]^*{\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P} * {\tt F}\dot{{≠}} {\tt B}}£
+else {
+  CORRUPTION_ERROR_ACTION(M);
+}
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fdbk{\tt F} * {\tt F}\fdbk^*{\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+B->fd = P;
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fd{\tt P} * {\tt B}\bk{\tt F} * {\tt F}\fdbk^*{\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+F->bk = P;
+£\ass{{\tt P}\fd[{\tt S}]\_ * \_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fd{\tt P} * {\tt P}\bk{\tt F} * {\tt F}\fdbk^*{\tt B}{}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+P->fd = F;
+£\ass{\_\bk{\tt P} * (sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fd{\tt P} * {\tt P}\fdbk[S]{\tt F} * {\tt F}\fdbk^*{\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+P->bk = B;
+£\ass{(sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fdbk{\tt P} * {\tt P}\fdbk[S]{\tt F} * {\tt F}\fdbk^*{\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+£\ass{(sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * {\tt B}\fdbk{\tt P} * {\tt P}\fdbk[S]^*{\tt B} {}\\{} 
+  * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I} * {\tt B}\dot{=}{\tt smallbins}{+}2{\tt I} * {\tt B}\dot{≠}{\tt P}}£
+£\ass{(sbinAndMap({\tt I}) \magicwand sbinsOK) * \amp{\tt smallmap}_{\tt I}↦1 * sbinnonempty({\tt S}, {\tt smallbins}{+}2{\tt I}) * {\tt I}\dot{∈}[2,32) * {\tt S}\dot=8{\tt I}}£
+£\ass{(sbinAndMap({\tt I}) \magicwand sbinsOK) * sbinAndMap({\tt I}) }£
+£\ass{sbinsOK}£
+\end{lstlisting}
+
+
+\chapter{{\tt tmalloc\_small}}\label{chap:tmalloc_small}
+
+\chapter{{\tt tmalloc\_large}}\label{chap:tmalloc_large}
+
+\chapter{{\tt sys\_alloc}}\label{chap:sys_alloc}
+
+
+\chapter{{\tt dlmalloc}}
+
+We now give the entire source code of {\tt dlmalloc}, interspersed with an explanatory commentary and annotations for the safety proof. We shall prove that a successful call to ${\tt dlmalloc}({\tt mem})$ allocates a chunk with payload no less that {\tt mem} bytes. I think it's probably sufficient to provide only a lower bound on the payload size -- it certainly simplifies the proof!
+
+\setcounter{lstnumber}{0}
+\begin{lstlisting}
+
+£\ass{p_1}£
+void* dlmalloc(size_t bytes) {
+#if USE_LOCKS
+  ensure_initialization(); /* initialize in sys_alloc if not using locks */
+#endif
+  if (!PREACTION(gm)) {
+    £\ass{-}£
+    void* mem;
+    size_t nb;
+    if (bytes <= MAX_SMALL_REQUEST) {
+      £\ass{P_{small}} where $P_{small} = {\tt bytes} ≤ 244$£
+\end{lstlisting}
+
+\subsection*{Allocating small chunks}\label{sect:allocating_small_chunks}
+\begin{lstlisting}
+      bindex_t idx;
+      binmap_t smallbits;
+      nb = (bytes < MIN_REQUEST)? MIN_CHUNK_SIZE : pad_request(bytes);
+      £\ass{P_{small} ∧ P_{nb}} where $P_{nb} = \max\{16, \ceil[8]{{\tt bytes}+4}\}$£
+      idx = small_index(nb);
+      £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8}}£
+      smallbits = gm->smallmap >> idx;
+      £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} {}\\{}
+      ∧ ∀i∈[0,32-{\tt idx})．{\tt smallbits}[i]=0 ⇔ smallbin(i+{\tt idx})=∅}£
+      if ((smallbits & 0x3U) != 0) { /* Remainderless fit to a smallbin. */
+        £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8}
+        ∧ (smallbin({\tt idx})≠∅ ∨ smallbin({\tt idx}+1)≠∅)}£
+\end{lstlisting}
+
+\subsubsection*{`Remainderless' fit to a smallbin}\label{sect:remainderless_fit_to_a_smallbin}
+\begin{lstlisting}
+        mchunkptr b, p;
+        idx += ~smallbits & 1;       /* Uses next bin if idx empty */
+        £\ass{P_{small} ∧ P_{nb} ∧ ({\tt idx} = \floor{{\tt nb}/8} ∨ {\tt idx} = \floor{{\tt nb}/8}+1) ∧ smallbin({\tt idx})≠∅}£
+        b = smallbin_at(gm, idx);
+        £\ass{P_{small} ∧ P_{nb} ∧ ({\tt idx} = \floor{{\tt nb}/8} ∨ {\tt idx} = \floor{{\tt nb}/8}+1) ∧ {\tt b}=smallbin({\tt idx}) ∧ {\tt b}≠∅ }£
+        p = b->fd;
+        £\ass{P_{small} ∧ P_{nb} ∧ ({\tt idx} = \floor{{\tt nb}/8} ∨ {\tt idx} = \floor{{\tt nb}/8}+1) {}\\{}
+        ∧ {\tt b}=smallbin({\tt idx}) ∧ {\tt b}={\tt p}::ps ∧ flags({\tt p})=01}£
+        assert(chunksize(p) == small_index2size(idx));
+        unlink_first_small_chunk(gm, b, p, idx);
+        £\ass{P_{small} ∧ P_{nb} ∧ ({\tt idx} = \floor{{\tt nb}/8} ∨ {\tt idx} = \floor{{\tt nb}/8}+1) {}\\{}
+        ∧ {\tt b}=smallbin({\tt idx}) ∧ {\tt b}=ps {}\\{}
+        ∧ flags({\tt p})=\unsetC\setP }£
+        set_inuse_and_pinuse(gm, p, small_index2size(idx));
+        £\ass{P_{small} ∧ P_{nb} ∧ ({\tt idx} = \floor{{\tt nb}/8} ∨ {\tt idx} = \floor{{\tt nb}/8}+1) {}\\{}
+        ∧ {\tt b}=smallbin({\tt idx}) ∧ {\tt b}=ps {}\\{}
+        ∧ flags({\tt p})=\setC\setP ∧ flags(next({\tt p}))=\setP}£
+        mem = chunk2mem(p);
+        check_malloced_chunk(gm, mem, nb);
+        £\ass{P_{small} ∧ P_{nb} ∧ ({\tt idx} = \floor{{\tt nb}/8} ∨ {\tt idx} = \floor{{\tt nb}/8}+1) {}\\{}
+        ∧ {\tt b}=smallbin({\tt idx}) ∧ {\tt b}=ps {}\\{}
+        ∧ flags({\tt p})=\setC\setP ∧ flags(next({\tt p}))=\setP ∧ {\tt mem}={\tt p}-2}£ 
+        goto postaction;
+      }
+      else if (nb > gm->dvsize) {
+        £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} {}\\{}
+        ∧ ∀i∈[0,32-{\tt idx})．{\tt smallbits}[i]=0 ⇔ smallbin(i+{\tt idx})=∅ {}\\{}
+        ∧ smallbin({\tt idx}) = smallbin({\tt idx}+1) = ∅}£
+        if (smallbits != 0) { /* Use chunk in next nonempty smallbin */
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} {}\\{}
+          ∧ ∀i∈[0,32-{\tt idx})．{\tt smallbits}[i]=0 ⇔ smallbin(i+{\tt idx})=∅ {}\\{}
+          ∧ ∃i∈[{\tt idx}+2,32)．smallbin(i)≠∅}£
+\end{lstlisting}
+
+\subsubsection*{`Remainderful' fit to a smallbin}\label{sect:remainderful_fit_to_a_smallbin}
+
+\begin{lstlisting}
+          mchunkptr b, p, r;
+          size_t rsize;
+          bindex_t i;
+          binmap_t leftbits = (smallbits << idx) & left_bits(idx2bit(idx));
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} {}\\{}
+          ∧ ∀i∈[{\tt idx}+1,32)．{\tt leftbits}[i]=0 ⇔ smallbin(i)=∅ {}\\{}
+          ∧ ∃i∈[{\tt idx}+2,32)．smallbin(i)≠∅}£
+          binmap_t leastbit = least_bit(leftbits);
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} {}\\{}
+          ∧ ∀i∈[{\tt idx}+1,32)．{\tt leftbits}[i]=0 ⇔ smallbin(i)=∅ {}\\{}
+          ∧ \floor{\log_2({\tt leastbit})} = \min\{i∈[{\tt idx}+2,32)\mid smallbin(i)≠∅\}}£
+          compute_bit2idx(leastbit, i);
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} {}\\{}
+          ∧ ∀i∈[{\tt idx}+1,32)．{\tt leftbits}[i]=0 ⇔ smallbin(i)=∅ {}\\{}
+          ∧ {\tt i} = \min\{i∈[{\tt idx}+2,32)\mid smallbin(i)≠∅\}}£
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt i} ≥ \floor{{\tt nb}/8}+2 ∧ smallbin({\tt i})≠∅}£
+          b = smallbin_at(gm, i);
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt i} ≥ \floor{{\tt nb}/8}+2 ∧ {\tt b} = smallbin({\tt i}) ∧ {\tt b}≠∅}£
+          p = b->fd;
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt i} ≥ \floor{{\tt nb}/8}+2 ∧ {\tt b} = smallbin({\tt i}) ∧ {\tt b}={\tt p}::ps}£
+          assert(chunksize(p) == small_index2size(i));
+          unlink_first_small_chunk(gm, b, p, i);
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt i} ≥ \floor{{\tt nb}/8}+2 ∧ {\tt b} = smallbin({\tt i}) ∧ {\tt b}=ps {}\\{}
+          ∧ flags({\tt p})=\unsetC\setP}£
+          rsize = small_index2size(i) - nb;
+          £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\unsetC\setP ∧ {\tt rsize}=size(p)-{\tt nb}}£
+          /* Fit here cannot be remainderless if 4byte sizes */
+          if (SIZE_T_SIZE != 4 && rsize < MIN_CHUNK_SIZE)
+            £\ass{false}£
+            set_inuse_and_pinuse(gm, p, small_index2size(i));
+          else {
+            set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb}}£
+            r = chunk_plus_offset(p, nb);
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{}
+            ∧ {\tt r}={\tt p}+{\tt nb}}£
+            set_size_and_pinuse_of_free_chunk(r, rsize);
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{} 
+            ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r}) = {\tt rsize}}£
+            replace_dv(gm, r, rsize);
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{} 
+            ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r}) = {\tt rsize} {}\\{}
+            ∧ {\tt dv}={\tt r} ∧ {\tt dvsize}={\tt rsize}}£
+          }
+          mem = chunk2mem(p);
+          check_malloced_chunk(gm, mem, nb);
+          £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{} 
+          ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r}) = {\tt rsize} ∧ {\tt mem}={\tt p}+2}£
+          goto postaction;
+        }
+\end{lstlisting}
+
+\subsubsection*{Using a treebin instead}\label{sect:using_a_treebin_instead}
+
+\begin{lstlisting}
+        else if (gm->treemap != 0 && (mem = tmalloc_small(gm, nb)) != 0) {
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} ∧ ∀i∈[{\tt idx},32)．smallbin(i)=∅ {}\\{}
+          ∧ {\tt mem}=p+2 ∧ flags(p)=\setC\setP ∧ size(p) ≥ {\tt nb}}£
+          check_malloced_chunk(gm, mem, nb);
+          goto postaction;
+        }
+      }
+    }
+\end{lstlisting}
+
+\subsection*{Allocating large chunks}\label{sect:allocating_large_chunks}
+
+\begin{lstlisting}
+    else if (bytes >= MAX_REQUEST)
+      £\ass{{\tt bytes} ≥ 2^{32}-63}£
+      nb = MAX_SIZE_T; /* Too big to allocate. Force failure (in sys alloc) */
+      £\ass{{\tt nb} = 2^{32}-1}£
+    else {
+      £\ass{P_{large}} where $P_{large} = 244 < {\tt bytes} < 2^{32}-63$£
+      nb = pad_request(bytes);
+      £\ass{P_{large} ∧ P_{nb}}£
+      if (gm->treemap != 0 && (mem = tmalloc_large(gm, nb)) != 0) {
+        £\ass{P_{large} ∧ P_{nb} ∧ {\tt mem}=p+2 ∧ flags(p)=\setC\setP ∧ size(p) ≥ {\tt nb}}£
+        check_malloced_chunk(gm, mem, nb);
+        goto postaction;
+      }
+    }
+\end{lstlisting}
+
+\subsection*{Using the designated victim}\label{sect:using_the_designated_victim}
+
+\begin{lstlisting}
+    £\ass{P_{nb}}£
+    if (nb <= gm->dvsize) {
+      £\ass{P_{nb} ∧ {\tt nb}≤{\tt dvsize}}£
+      size_t rsize = gm->dvsize - nb;
+      £\ass{P_{nb} ∧ {\tt nb}≤{\tt dvsize} ∧ {\tt rsize}={\tt dvsize}-{\tt nb}}£
+      mchunkptr p = gm->dv;
+      £\ass{P_{nb} ∧ {\tt nb}≤size({\tt p}) ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ flags({\tt p})=\unsetC\setP}£
+      if (rsize >= MIN_CHUNK_SIZE) { /* split dv */
+        £\ass{P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}≥16 ∧ flags({\tt p})=\unsetC\setP}£
+        mchunkptr r = gm->dv = chunk_plus_offset(p, nb);
+        £\ass{P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}≥16 ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt p})=\unsetC\setP}£
+        gm->dvsize = rsize;
+        set_size_and_pinuse_of_free_chunk(r, rsize);
+        £\ass{P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}≥16 ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt p})=\unsetC\setP {}\\{}
+        ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r})={\tt rsize}}£
+        set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+        £\ass{P_{nb} ∧ {\tt rsize}≥16 ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} {}\\{}
+        ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r})={\tt rsize}}£
+      }
+      else { /* exhaust dv */
+        £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\unsetC\setP}£
+        size_t dvs = gm->dvsize;
+        gm->dvsize = 0;
+        gm->dv = 0;
+        set_inuse_and_pinuse(gm, p, dvs);
+        £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\setC\setP}£
+      }
+      £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\setC\setP}£
+      mem = chunk2mem(p);
+      check_malloced_chunk(gm, mem, nb);
+      £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\setC\setP ∧ {\tt mem}={\tt p}+2}£
+      goto postaction;
+    }
+\end{lstlisting}
+
+\subsection*{Using the top chunk}
+
+\begin{lstlisting}
+    else if (nb < gm->topsize) { /* Split top */
+      £\ass{ P_{nb} ∧ {\tt nb} < size({\tt top}) }£
+      size_t rsize = gm->topsize -= nb;
+      £\ass{ P_{nb} ∧ {\tt rsize}=size({\tt top})-{\tt nb} ∧ {\tt rsize}>0}£
+      mchunkptr p = gm->top;
+      £\ass{ P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}>0}£
+      mchunkptr r = gm->top = chunk_plus_offset(p, nb);
+      £\ass{ P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}>0 ∧ {\tt r}={\tt p}+{\tt nb}}£
+      r->head = rsize | PINUSE_BIT;
+      £\ass{ P_{nb} ∧ size({\tt r})=size({\tt p})-{\tt nb} ∧ size({\tt r})>0 ∧ flags({\tt r})=\unsetC\setP ∧ {\tt r}={\tt p}+{\tt nb}}£
+      set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+      £\ass{ P_{nb} ∧ size({\tt p})={\tt nb} ∧ flags({\tt p}) = \setC\setP ∧ size({\tt r})>0 ∧ flags({\tt r})=\unsetC\setP ∧ {\tt r}={\tt p}+{\tt nb}}£
+      mem = chunk2mem(p);
+      £\ass{ P_{nb} ∧ size({\tt p})={\tt nb} ∧ flags({\tt p}) = \setC\setP ∧ {\tt mem}={\tt p}+2}£
+      check_top_chunk(gm, gm->top);
+      check_malloced_chunk(gm, mem, nb);
+      goto postaction;
+    }
+\end{lstlisting}
+
+\subsection*{Obtaining memory from the system}
+
+\begin{lstlisting}
+    mem = sys_alloc(gm, nb);
+  postaction:
+    POSTACTION(gm);
+    return mem;
+  }
+  return 0;
+}
+\end{lstlisting}
+
+\chapter{{\tt dlfree}}\label{chap:dlfree}
+
+\setcounter{lstnumber}{1}
+\begin{lstlisting}
+void dlfree(void* mem) {
+  if (mem != 0) {
+    mchunkptr p  = mem2chunk(mem);
+#if FOOTERS
+    mstate fm = get_mstate_for(p);
+    if (!ok_magic(fm)) {
+      USAGE_ERROR_ACTION(fm, p);
+      return;
+    }
+#else /* FOOTERS */
+#define fm gm
+#endif /* FOOTERS */
+    if (!PREACTION(fm)) {
+      check_inuse_chunk(fm, p);
+      if (RTCHECK(ok_address(fm, p) && ok_inuse(p))) {
+        size_t psize = chunksize(p);
+        mchunkptr next = chunk_plus_offset(p, psize);
+        if (!pinuse(p)) {
+          size_t prevsize = p->prev_foot;
+          if (is_mmapped(p)) {
+            psize += prevsize + MMAP_FOOT_PAD;
+            if (CALL_MUNMAP((char*)p - prevsize, psize) == 0)
+              fm->footprint -= psize;
+            goto postaction;
+          }
+          else {
+            mchunkptr prev = chunk_minus_offset(p, prevsize);
+            psize += prevsize;
+            p = prev;
+            if (RTCHECK(ok_address(fm, prev))) { /* consolidate backward */
+              if (p != fm->dv) {
+                unlink_chunk(fm, p, prevsize);
+              }
+              else if ((next->head & INUSE_BITS) == INUSE_BITS) {
+                fm->dvsize = psize;
+                set_free_with_pinuse(p, psize, next);
+                goto postaction;
+              }
+            }
+            else
+              goto erroraction;
+          }
+        }
+
+        if (RTCHECK(ok_next(p, next) && ok_pinuse(next))) {
+          if (!cinuse(next)) {  /* consolidate forward */
+            if (next == fm->top) {
+              size_t tsize = fm->topsize += psize;
+              fm->top = p;
+              p->head = tsize | PINUSE_BIT;
+              if (p == fm->dv) {
+                fm->dv = 0;
+                fm->dvsize = 0;
+              }
+              if (should_trim(fm, tsize))
+                sys_trim(fm, 0);
+              goto postaction;
+            }
+            else if (next == fm->dv) {
+              size_t dsize = fm->dvsize += psize;
+              fm->dv = p;
+              set_size_and_pinuse_of_free_chunk(p, dsize);
+              goto postaction;
+            }
+            else {
+              size_t nsize = chunksize(next);
+              psize += nsize;
+              unlink_chunk(fm, next, nsize);
+              set_size_and_pinuse_of_free_chunk(p, psize);
+              if (p == fm->dv) {
+                fm->dvsize = psize;
+                goto postaction;
+              }
+            }
+          }
+          else
+            set_free_with_pinuse(p, psize, next);
+
+          if (is_small(psize)) {
+            insert_small_chunk(fm, p, psize);
+            check_free_chunk(fm, p);
+          }
+          else {
+            tchunkptr tp = (tchunkptr)p;
+            insert_large_chunk(fm, tp, psize);
+            check_free_chunk(fm, p);
+            if (--fm->release_checks == 0)
+              release_unused_segments(fm);
+          }
+          goto postaction;
+        }
+      }
+    erroraction:
+      USAGE_ERROR_ACTION(fm, p);
+    postaction:
+      POSTACTION(fm);
+    }
+  }
+#if !FOOTERS
+#undef fm
+#endif /* FOOTERS */
+}
+\end{lstlisting}
+
+\end{document}

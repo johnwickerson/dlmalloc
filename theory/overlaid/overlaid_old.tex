@@ -1,0 +1,270 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{a4wide}
+\usepackage{JohnMath}
+
+\usepackage[svgnames]{xcolor}
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Purple},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\renewcommand{\arraystretch}{1.2}
+
+\title{Specifying overlaid datastructures}
+\author{John Wickerson}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{A singly-indexed list}
+
+
+
+Our first datastructure is a singly-indexed list. Every node has a value and a pointer to the next node. The final node's next pointer is set to 0. The first node is a sentinel, at a fixed location $r$. Our datastructure can be described by the following formula:
+\[
+ls^+(r,0)
+\]
+where:
+\[
+\begin{array}{rcl}
+ls(x,z) &\iffdef& x=z ∧ emp  ∨  ls^+(x,z) \\
+ls^+(x,z) &\iffdef& ∃y．x^1 \halfpto \underscore  *  x^2↦y  *  ls(y,z)
+\end{array}
+\]
+Note that the value field is only a half-pointer, making it read-only. (The other half is retained by the client who added that element to the list.) The datastructure supports two operations: inserting an element, and removing an element. We can specify these two methods like so:
+\[
+\begin{array}{c}
+\seqspec{\boxed{ls^+(r,0)} * x^1 ↦ v * x^2 ↦ \underscore}{insert(x)}{\boxed{ls^+(r,x) * ls^+(x,0)} * x\halfpto v} \\
+\seqspec{\boxed{ls^+(r,x) * ls^+(x,0)} * x^1\halfpto v}{remove(x)}{\boxed{ls^+(r,0)} * x^1 ↦ v * x^2 ↦ \underscore}
+\end{array}
+\]
+The internal state of the datastructure is written inside a box, whereas the state owned by the client is written outside the box. Upon inserting an element $x$, the client receives a token, which is implemented as ``$x\halfpto v$''. When invoking the {\tt remove} method, the client must provide that token, as proof that he was the client who inserted the element. By this system of tokens, a client who has inserted an element $x$ can assert that the datastructure's internal state contains that element -- even though other calls to {\tt insert} and {\tt remove} may have occurred in the interim.
+
+To formalise this reasoning, we use RGSep actions. The actions that are permitted on the datastructure's internal state are the following:
+\[
+\begin{array}{rr}
+\textsc{Add}(x): & \boxed{ls(r,w) * true}  ⊦ w^2 ↦ y  \rightsquigarrow  w^2 ↦ x * x^1\halfpto v * x^2↦y \\
+\textsc{Rm}(x): & x^1\halfpto v   *   \boxed{ls(r,w) * true}  ⊦ w^2 ↦ x * x^1\halfpto v * x^2↦y  \rightsquigarrow  w^2 ↦ y
+\end{array}
+\]
+The purpose of the ``$ls(r,w)$'' guards is to ensure that $w$ is actually an element in the list. Without it, {\sc Add}'s precondition would be satisfied by an arbitrary heap cell. We require the client invoking $\textsc{Rm}(x)$ to have the token $x^1\halfpto v$ in his local state.
+
+\subsection{Verifying the {\tt insert} method}
+
+\begin{lstlisting}
+£\ass{\boxed{ls^+(r,0)} * x^1 ↦ v * x^2↦\underscore}£
+insert(x){
+  int* p = r;
+  £\ass{\boxed{ls(r,p) * ls^+(p,0)} * x^1 ↦ v * x^2↦\underscore}£
+  while ([p+1]!=0 && ...) do p:=[p+1];
+  £\ass{\boxed{ls(r,p) * ls^+(p,0)} * x^1 ↦ v * x^2↦\underscore}£
+  £\ass{\boxed{ls(r,p) * p^1\halfpto\underscore * p^2↦p' * ls(p',0)} * x^1 ↦ v * x^2↦\underscore}£
+  [x+1]:=[p+1];
+  £\ass{\boxed{ls(r,p) * p^1 \halfpto\underscore * p^2↦p' * ls(p',0)} * x^1 ↦ v * x^2↦p'}£
+  // begin action Add(x)
+    £\ass{ls(r,p) * p^1 \halfpto\underscore * p^2↦p' * ls(p',0) * x^1 ↦ v * x^2↦p'}£
+    [p+1]:=x;
+    £\ass{ls(r,p) * p^1 \halfpto\underscore * p^2↦x * x^1 \halfpto v * x^2↦p' * ls(p',0) * x^1\halfpto v}£
+  // end action
+  £\ass{\boxed{ls(r,p) * p^1 \halfpto\underscore * p^2↦x * x^1 \halfpto v * x^2↦p' * ls(p',0)} * x^1\halfpto v}£
+}
+£\ass{\boxed{ls^+(r,x) * ls^+(x,0)} * x^1\halfpto v}£
+\end{lstlisting}
+
+\subsection{Verifying the {\tt remove} method}
+
+\begin{lstlisting}
+£\ass{\boxed{ls^+(r,x) * ls^+(x,0)} * x^1\halfpto v}£
+remove(x){
+  int* p = r;
+  £\ass{\boxed{ls(r,p) * ls^+(p,x) * ls^+(x,0)} * x^1\halfpto v}£
+  while ([p+1]!=x) do p:=[p+1];
+  £\ass{\boxed{ls(r,p) * p^1\halfpto\underscore * p^2↦x * ls^+(x,0)} * x^1\halfpto v}£
+  £\ass{\boxed{ls(r,p) * p^1\halfpto\underscore * p^2{+}1↦x * x^1\halfpto\underscore * x^2↦y * ls(y,0)} * x^1\halfpto v}£
+  // begin action Rm(x) 
+    £\ass{ls(r,p) * p^1\halfpto\underscore * p^2↦x * x^1↦v * x^2 ↦ y * ls(y,0)}£
+    [p+1]:=[x+1];
+    £\ass{ls(r,p) * p^1\halfpto\underscore * p^2↦y * ls(y,0) * x^1↦v * x^2↦y}£
+  // end action
+  £\ass{\boxed{ls(r,p) * p^1\halfpto\underscore * p^2↦y * ls(y,0)} * x^1↦v * x^2↦y}£
+}
+£\ass{\boxed{ls^+(r,0)} * x^1 ↦ v * x^2↦\underscore}£
+\end{lstlisting}
+
+\section{A doubly-indexed list}
+
+Let us move to a doubly-indexed list. Every node now has three fields: a value, and two next pointers. The two chains of next pointers present two orderings on the same set of nodes. Both orderings begin at the same sentinel node, which at a fixed location $r$. Our datastructure can be described by the following formula:
+\[
+ls_0^+(r,0) ∧ ls_1^+(r,0)
+\]
+where:
+\[
+\begin{array}{rcl}
+ls_0(x,z) &\iffdef& x=z ∧ emp ∨ ls_0^+(x,z) \\
+ls_0^+(x,z) &\iffdef& ∃y．x^1 \halfpto \underscore  *  x^2↦y *  x^3 ↦\underscore  *  ls_0(y,z)
+\end{array}
+\]
+and:
+\[
+\begin{array}{rcl}
+ls_1(x,z) &\iffdef& x=z ∧ emp ∨ ls_1^+(x,z) \\
+ls_1^+(x,z) &\iffdef& ∃y．x^1 \halfpto \underscore  *  x^2↦\underscore *  x^3 ↦y  *  ls_1(y,z)
+\end{array}
+\]
+
+\noindent We can specify the insert method like so:
+\begin{quote}
+\begin{lstlisting}
+£\ass{\boxed{ls_0^+(r,0) ∧ ls_1^+(r,0)} * x^1 ↦ v * x^2 ↦ \underscore * x^3 ↦ \underscore}£
+insert(x)
+£\ass{\boxed{(ls_0^+(r,x) * ls_0^+(x,0)) ∧ (ls_1^+(r,x) * ls_1^+(x,0))} * x\halfpto v}£
+\end{lstlisting}
+\end{quote}
+
+\noindent We can specify the remove method like so:
+\begin{quote}
+\begin{lstlisting}
+£\ass{\boxed{(ls_0^+(r,x) * ls_0^+(x,0)) ∧ (ls_1^+(r,x) * ls_1^+(x,0))} * x^1\halfpto v}£
+remove(x)
+£\ass{\boxed{ls_0^+(r,0) ∧ ls_1^+(r,0)} * x^1 ↦ v * x^2 ↦ \underscore * x^3 ↦ \underscore}£
+\end{lstlisting}
+\end{quote}
+
+\noindent The actions on the datastructure can be specified like so:
+\[
+\begin{array}{rl}
+\textsc{Add}(x): & \boxed{(ls_0(r,w) * true) ∧ (ls_1(r,u) * true)} \\
+& ⊦ w^2 ↦ y  *  u^3 ↦ z   \rightsquigarrow  w^2 ↦ x *  u^3 ↦ x  * x^1\halfpto v * x^2↦y  *  x^3 ↦ z \\
+\textsc{Rm}(x): & x^1\halfpto v   *   \boxed{(ls_0(r,w) * true) ∧ (ls_1(r,u) * true)} \\
+& ⊦ w^2 ↦ x *  u^3 ↦ x  * x^1\halfpto v * x^2↦y  *  x^3 ↦ z  \rightsquigarrow  w^2 ↦ y  *  u^3 ↦ z
+\end{array}
+\]
+
+\noindent Note, in particular, that we cannot write {\sc Add}'s guard as 
+\[
+\boxed{(ls_0(r,w) ∧ ls_1(r,u)) * true}
+\]
+because we don't know that the first ordering from $r$ to $w$ describes the same nodes as the second ordering from $r$ to $u$.
+
+\subsection{Verifying the {\tt insert} method}
+
+\begin{lstlisting}
+£\ass{\boxed{ls_0^+(r,0) ∧ ls_1^+(r,0)} * x^1 ↦ v * x^2↦\underscore * x^3↦\underscore}£
+insert(x){
+  int* p = r;
+  int* q = r;
+  £\ass{\boxed{(ls_0(r,p) * ls_0^+(p,0)) ∧ (ls_1(r,q) * ls_1^+(q,0))} * x^1 ↦ v * x^2↦\underscore * x^3↦\underscore}£
+  while ([p+1]!=0 && ...) do p:=[p+1];
+  while ([q+2]!=0 && ...) do q:=[q+2];
+  £\ass{\boxed{(ls_0(r,p) * ls_0^+(p,0)) ∧ (ls_1(r,q) * ls_1^+(q,0))} * x^1 ↦ v * x^2↦\underscore * x^3↦\underscore}£
+  £\ass{\boxed{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦p' *  p^3↦\underscore  *  ls_0(p',0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦q'  *  ls_1(q',0))} {}\\{} 
+  * x^1 ↦ v * x^2↦\underscore * x^3↦\underscore}£
+  [x+1]:=[p+1];
+  [x+2]:=[q+2];
+  £\ass{\boxed{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦p' *  p^3↦\underscore  *  ls_0(p',0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦q'  *  ls_1(q',0))} {}\\{}
+  * x^1 ↦ v * x^2↦p' * x^3↦q'}£
+  // begin action Add(x)
+    £\ass{((ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦p' *  p^3↦\underscore  *  ls_0(p',0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦q'  *  ls_1(q',0))) {}\\{}
+  * x^1 ↦ v * x^2↦p' * x^3↦q'}£
+    // apply rule £$(P∧Q)*R ⇒ (P*R) ∧ (Q*R)$£ 
+    £\ass{((ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦\underscore *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦\underscore  *  ls_1^+(x,0)))  *  x^1 \halfpto v}£
+    // begin frame
+      £\ass{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦\underscore *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦\underscore  *  ls_1^+(x,0))}£
+      [p+1]:=x;
+      [q+2]:=x; // see comment below
+      £\ass{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦x  *  ls_1^+(x,0))}£
+    // end frame
+    £\ass{((ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦x  *  ls_1^+(x,0)))  *  x^1 \halfpto v}£
+  // end action
+  £\ass{\boxed{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore   *  x^1 \halfpto \underscore * x^2↦p' * x^3↦\underscore   *  ls_0(p',0)) ∧ {}\\{}
+  (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦x   * x^1 \halfpto \underscore * x^2↦\underscore * x^3↦q'  *  ls_1(q',0) )} {}\\{}
+  * x^1 \halfpto v}£
+}
+£\ass{\boxed{(ls_0^+(r,x) * ls_0^+(x,0)) ∧ (ls_1^+(r,x) * ls_1^+(x,0))} * x^1\halfpto v}£
+\end{lstlisting}
+
+\noindent We must justify the following step:
+\begin{lstlisting}
+£\ass{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦\underscore *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+(ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦\underscore  *  ls_1^+(x,0))}£
+[p+1]:=x;
+[q+2]:=x;
+£\ass{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+(ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦x  *  ls_1^+(x,0))}£
+\end{lstlisting}
+
+\noindent We propose to use the following conjunction rule:
+\[
+\infer{\seqspec{P_1}C{Q_1} \\ \seqspec{P_2}C{Q_2}}{\seqspec{P_1 ∧ P_2}C{Q_1 ∧ Q_2}}
+\]
+
+\noindent The first required antecedant is the following (the other will follow by symmetry):
+\begin{lstlisting}
+£\ass{ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦\underscore *  p^3↦\underscore  *  ls_0^+(x,0)}£
+[p+1]:=x;
+[q+2]:=x;
+£\ass{ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)}£
+\end{lstlisting}
+
+\noindent This reduces to:
+\begin{lstlisting}
+£\ass{ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)}£
+[q+2]:=x;
+£\ass{ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)}£
+\end{lstlisting}
+
+\noindent This is broadly similar to proving: 
+\[
+\seqspec{ls_0^+(r,0)}{[q+2]:=x}{ls_0^+(r,0)}
+\]
+
+\noindent Intuitively, this is sensible; the $ls_0$ predicate is sensitive only to the values of the \emph{second} fields of nodes, so updating the \emph{third} field of node $q$ should preserve the predicate. But we are making assumptions about $q$; namely, that it corresponds to a valid node in the list. For if $q$ is an arbitrary heap address, then its third field, located at $q+2$, could coincide with the second field of some node in the list, and in this case, the postcondition would fail. Of course, we \emph{are} justified in making this assumption about $q$, because we know that $ls_1(r,q)$ holds. Unfortunately, we deleted this fact when we applied the conjunction rule.
+
+An alternative plan, then, is to make use of the following law of separation logic:
+\[
+(P * Q) ∧ (R * S)  ⊆  ((S \septract (P*Q)) ∧ R) * S
+\]
+\begin{lstlisting}
+£\ass{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦\underscore *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+(ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦\underscore  *  ls_1^+(x,0))}£
+£\ass{((q^3↦\underscore \septract (ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦\underscore *  p^3↦\underscore  *  ls_0^+(x,0))) {}\\{}
+∧ (ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  ls_1^+(x,0))) * q^3↦\underscore}£
+[p+1]:=x;
+[q+2]:=x;
+£\ass{(ls_0(r,p) * p^1\halfpto\underscore   *   p^2↦x *  p^3↦\underscore  *  ls_0^+(x,0)) ∧ {}\\{}
+(ls_1(r,q) * q^1\halfpto\underscore * q^2↦\underscore  *  q^3↦x  *  ls_1^+(x,0))}£
+\end{lstlisting}
+
+
+\end{document}

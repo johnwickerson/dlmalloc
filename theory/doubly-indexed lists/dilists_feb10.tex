@@ -1,0 +1,152 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{JohnMath}
+
+\renewcommand{\boxed}[2][]{%
+  \renewcommand{\arraystretch}{0.9}%
+  \mbox{\mdseries\begin{tabular}{|@{\hspace{2px}}L@{\hspace{2px}}|}\hline #2 \\ \hline \end{tabular}}_{\ifthenelse{\equal{#1}{a}}{\rm a}{\ifthenelse{\equal{#1}{b}}{\rm b}{#1}}}%
+}
+\renewcommand{\Boxed}[2][]{%
+  \renewcommand{\arraystretch}{1.0}%
+  \mbox{\mdseries\begin{tabular}{|@{\hspace{2px}}L@{\hspace{2px}}|}\hline #2 \\[1.5pt] \hline \end{tabular}}_{\ifthenelse{\equal{#1}{a}}{\rm a}{\ifthenelse{\equal{#1}{b}}{\rm b}{#1}}}%
+}
+
+\title{Reasoning about doubly-indexed lists \\ using separation logic}
+\author{John Wickerson}
+\date{14th January 2010}
+
+\newcommand{\ndil}{\opit{ndil}}
+\newcommand{\dil}{{\opit{dil}}}
+\newcommand{\List}{{\opit{list}}}
+\newcommand{\nlist}{{\opit{nlist}}}
+\newcommand{\freshquant}{\reflectbox{$\mathsf{N}$}}
+\newcommand{\elems}{\opit{elems}}
+
+% CODE LISTINGS
+\usepackage[svgnames]{xcolor}
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Purple},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+
+\begin{document}
+
+\maketitle
+
+\section{Motivation}
+
+Suppose nodes $n$ comprise a pair of pointers, at $n+0$ and $n+1$ respectively. Suppose we have two root nodes $r_0$ and $r_1$, and that from $r_0$ one can follow ``+0'' pointers to trace out a null-terminated list through all the nodes, and also that from $r_1$ one can follow ``+1'' pointers to trace out another null-terminated list through all the nodes. This scenario represents, for instance, one in which we have a collection of values that we wish to sort in two different ways.
+
+How might we describe such `doubly-indexed' lists?
+
+\subsection{First attempt}
+Let $\dil_{\rm first}$ be the strongest predicate satisfying:
+\[
+\dil_{\rm first}(x_0,x_1) ⇔ \ml{x_0=0 ∧ x_1=0 ∧ \emp ∨ {}\\{} x_0≠0 ∧ x_1≠0 ∧ ∃y_0,y_1．x_0{+}0↦y_0 * x_1{+}1↦y_1 * \dil_{\rm first}(y_0,y_1)}
+\]
+Then we can describe our doubly-indexed list as $\dil_{\rm first}(r_0,r_1)$. See how the lists are constrained to be the same length because the predicate steps along the two lists `in sync'. However, we are failing to enforce that the two lists actually contain the same set of nodes, so this predicate is unsound.
+
+\subsection{Second attempt}
+If the first attempt above relates to the ML type $(α × α)$~\emph{list}, then this second attempt is like the ML type $α$~\emph{list} $×$ $α$~\emph{list}.
+
+Let us project out the two lists, and use ordinary conjunction to combine them together:
+\[
+\ndil(r_0,r_1) ≝ \nlist_0(r_0) ∧ \nlist_1(r_1)
+\]
+where $\nlist_0$ and $\nlist_1$ are the strongest predicates satisfying:
+\[
+\ml{
+\nlist_0(x) ⇔ \ml{x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y\ldotp x{+}0 ↦ y * x{+}1 ↦ \underscore * \nlist_0(y)}
+\\
+\nlist_1(x) ⇔ \ml{x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y\ldotp x{+}0 ↦ \underscore * x{+}1 ↦ y * \nlist_1(y)}
+}
+\]
+
+What we are saying is
+\begin{itemize}
+\item that there is a list formed by following the ``+0'' pointers and that the ``+1'' pointers may point anywhere, and also
+\item that there is a list formed by following the ``+1'' pointers and that the ``+0'' pointers may point anywhere.
+\end{itemize}
+Taken in conjunction, these statements imply that we have a list formed by following the ``+0'' pointers and another formed by following the ``+1'' pointers. 
+
+Unfortunately, the projection of the two lists has to happen at the topmost level, so having projected out the two lists, we lose the tight correspondence between the elements. In other words, having located a node in one list, we need to reason about the entire datastructure in order to find the node in the other list too, and this goes against our mantra of `local' reasoning.
+
+\section{Boxed regions}
+
+Here's another possibility. We identify two disjoint regions of the state and give them names, α and β. Let $\List_0$ and $\List_1$ be the strongest predicates satisfying:
+\[
+\begin{array}{c}
+\List_0(x) ⇔ \ml{x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y． x{+}0 ↦ y * \boxed[β]{x{+}1 ↦ \underscore} * \List_0(y)}
+\\
+\List_1(x) ⇔ \ml{x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y．\boxed[α]{x{+}0 ↦ \underscore} * x{+}1 ↦ y * \List_1(y)}
+\end{array}
+\] 
+The first predicate is to be read: `There is a list at $x$ if $x=0$ and the heap is empty; or otherwise, if $x+0$ identifies another list, and the location $x+1$ is defined in the other view of the list.' From knowing that $x+1$ appears in region β, and also (via the $\List_1$ predicate) knowing that the only pointers in region β point to lists, we can deduce that $x+1$ must point to a list in the other view, which is what we were after. 
+
+The named regions allow a mix of local and global reasoning. We can make an assertion about a small part of one of the regions, but conjoin that with a boxed assertion concerning the entirety of another (or perhaps the same) region.
+
+Then we can describe our doubly-indexed list like so:
+\[
+\dil(r_0,r_1) ≝ \freshquant α．\freshquant β．\boxed[α]{\List_0(r_0)} * \boxed[β]{\List_1(r_1)}
+\]
+
+The $\freshquant$ quantifier creates a new region and gives it a name by which it can later be identified -- we'll consider its semantics now.
+
+\subsection{Formal semantics of boxed regions}
+
+The syntax of assertions is as follows:
+\[
+P ::= e\pto[k]e ｜ \emp ｜ e=e ｜ e>e ｜ \true ｜ \boxed[α]{P} ｜ \freshquant α．P ｜ P ∨ P ｜P ∧ P ｜ P * P ｜ ∃ x． P ｜ ∀x．P
+\]
+where $k∈(0,1]$ and $e$ is a pure expression. The semantics of an assertion is given as a satisfaction relation on states. A state is a 3-tuple, comprising a `current' heap $σ$, a collection of boxed heaps $Γ$, and a store $i$ mapping program and logical variables to values.
+\[
+\begin{array}[t]{@{}lcl}
+σ,Γ,i ⊧ e_0\pto[k]e_1 &≝& σ = \{⟦e_0⟧_i \pto[k] ⟦e_1⟧_i\} \\
+σ,Γ,i ⊧ \emp &≝& σ=∅ \\
+σ,Γ,i ⊧ e_0 = e_1 &≝& ⟦e_0⟧_i = ⟦e_1⟧_i \\
+σ,Γ,i ⊧ P_0 * P_1 &≝& ∃ σ',σ''． σ=σ'⊙ σ'' ∧ σ',Γ,i⊧ P_0 ∧ σ'',Γ,i⊧ P_1 \\
+σ,Γ,i ⊧ P_0 ∧ P_1 &≝& σ,Γ,i⊧ P_0 ∧ σ,Γ,i⊧ P_1 \\
+σ,Γ,i ⊧ ∃x．P &≝& ∃v．σ,Γ,i[x↦v] ⊧ P \qquad \text{provided $x∉\dom(i)$} \\
+σ,Γ,i ⊧ \boxed[α]{P} &≝& σ=∅ ∧ Γ(α),Γ,i⊧ P \qquad \text{provided $α∈\dom(Γ)$}\\
+σ,Γ,i ⊧ \freshquant α．P &≝& ∃σ',σ''．\ml{σ=σ'⊙σ'' ∧ σ'' \# Γ {}\\{} ∧ σ',Γ[α↦σ''],i⊧P \qquad \text{provided $α∉\dom(Γ)$}}
+\end{array}
+\]
+where $σ\#Γ$ means $∀σ'∈ \oprm{image}(Γ)．σ⊥σ'$.\footnote{Note that there is a dragon lurking here. Consider the assertion $x↦1 * \boxed[α]{x↦1}$. Morally, this assertion ought to be false, because we cannot have cell $x$ existing in both the current heap and boxed heap α. But if so, then the assertion $\Boxed[α]{x↦1 * \boxed[α]{x↦1}}$ would also be false, but that assertion is also equivalent to $\boxed[α]{x↦1}$. So we would get $\boxed[α]{x↦1} = \false$, which is not good.
+
+The solution in Mike et al's ECOOP paper is to impose a well-formedness constraint at the top-most level -- namely, that σ and the heaps in Γ must all be disjoint -- but to allow intermediate assertions to be ill-formed.
+
+The problems may possibly be alleviated by dealing properly with the generation of new regions. For instance, were we to restrict the scope of the region α in the above example, like so: $\freshquant α．x↦1 * \boxed[α]{x↦1}$, then the assertion would be definitively false, because we can no longer access the region α.}
+
+\subsection{Properties}
+\begin{itemize}
+\item $\Boxed[a]{P * \boxed[b]{Q}} = \left\{\begin{array}{@{}ll} \boxed[a]{P} * \boxed[b]{Q} & \text{if $a≠b$} \\[3pt]
+\Boxed[a]{P * Q} & \text{if $a=b$}\end{array}\right.$
+\item $\boxed[a]{P} * \boxed[a]{Q} = \boxed[a]{P∧Q}$
+\item $\freshquant α．P ⇔ P*\true$ provided $α∉P$
+\item $\freshquant α．P * Q ⇔ P * \freshquant α．Q$ provided $α∉P$
+\item $\freshquant α．\boxed[α]{P} ⇔ P$ provided $α∉P$
+\end{itemize}
+
+\subsection{Correctness of the $\dil$ predicate}
+
+\begin{theorem}
+For all $r_0, r_1, X_0, X_1, σ_α$ and $σ_β$, where $elems(X_0) = elems
+.0(X_1)$
+\end{theorem}
+
+\begin{proof}
+C
+\end{proof}
+
+\end{document}

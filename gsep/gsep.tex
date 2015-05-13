@@ -1,0 +1,642 @@
+\documentclass[10pt]{article}
+\usepackage[landscape, a4paper]{geometry}
+\usepackage{JohnMath}
+\usepackage{mathtools}
+
+% The following sets text in Times, but keeps maths and tt in Computer Modern.
+\renewcommand{\rmdefault}{ptm}
+
+\usepackage[svgnames]{xcolor}
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Black},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin={\normalsize\rmfamily\color{Black}}
+}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\renewcommand{\arraystretch}{1.2}
+
+\renewcommand{\true}{\mathsf{tt}}
+\renewcommand{\emp}{\emph{emp}}
+
+%\renewcommand{\boxed}[2][]{{\textbf{[}}#2{\textbf{]}}_{#1}}
+
+\newcommand{\rsem}[1]{{(\![}{#1}{]\!)}}
+%\newcommand{\iterstar}[2][]{\text{\LARGE $*$}^{#1}_{#2}}
+
+\newcommand{\defined}{\mathop{\text{def}}}
+
+\newcommand{\SET}[2]{\left\{\begin{array}{@{}l|l@{}} #1 & #2 \end{array}\right\}}
+
+\newenvironment{mapping}{\left\{ \begin{array}{@{}r@{\,↦\,}l@{}}}{\end{array}\right\}}
+
+%\newcommand{\block}[1]{\smash{\overbracket[0.5pt][2pt]{\underscore\,\ldots\,\underscore}^{#1}}}
+
+% \newcommand{\ret}{\texttt{ret}}
+
+% \newcommand{\malloc}{{\tt malloc}}
+% \newcommand{\sbrk}{{\tt sbrk}}
+% \newcommand{\free}{{\tt free}}
+% \newcommand{\ls}[2][]{#1 \twoheadrightarrow #2}
+% \newcommand{\arena}{\mathop{\emph{arena}}}
+% \newcommand{\anArena}{\emph{anArena}}
+% \newcommand{\token}{\mathop{\emph{token}}}
+% \newcommand{\arenatoken}{\mathop{\emph{arenatoken}}}
+% \newcommand{\block}{\mathop{\emph{block}}}
+% \newcommand{\ublock}{\mathop{\emph{ublock}}}
+% \newcommand{\ablock}{\mathop{\emph{ablock}}}
+% \newcommand{\sblock}{\mathop{\emph{sblock}}}
+% \newcommand{\A}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize a}}}{\rightarrow}}} #2}
+% \newcommand{\U}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize u}}}{\rightarrow}}} #2}
+% \newcommand{\B}[2][]{#1 {\rightarrow} #2}
+% \newcommand{\E}[2]{#2 \mathbin{\raisebox{2pt}{$\curvearrowleft$}} #1}
+% \newcommand{\s}{{\tt s}}
+% \renewcommand{\t}{{\tt t}}
+% \newcommand{\temp}{{\tt temp}}
+% \newcommand{\p}{{\tt p}}
+% \newcommand{\q}{{\tt q}}
+% \renewcommand{\v}{{\tt v}}
+% \newcommand{\brk}{\mathop{\emph{brk}}}
+% \newcommand{\brka}{\mathop{\emph{brka}}}
+% \newcommand{\n}{{}\\{} \hfill }
+% \newcommand{\nw}{{\tt nw}}
+% \newcommand{\ap}{{\tt ap}}
+% \newcommand{\nbytes}{{\tt nbytes}}
+% \newcommand{\WORD}{{\tt WORD}}
+% \newcommand{\mathceil}[1]{\left\lceil#1\right\rceil}
+% \newcommand{\ptoU}{\mathbin{↦_{\sf u}}}
+% \newcommand{\ptoA}{\mathbin{↦_{\sf a}}}
+% \newcommand{\ptoS}{\mathbin{↦_{\sf s}}}
+% \newcommand{\uninit}{\mathop{\emph{uninit}}}
+\newcommand{\arity}{\mathop{\mathit{arity}}}
+\newcommand{\loc}[1]{\mathop{\mathit{loc}}(#1)}
+\newcommand{\sha}[1]{\mathop{\mathit{sha}}(#1)}
+\newcommand{\lift}[1]{\mathop{\mathit{lift}}(#1)}
+\newcommand{\pullout}[1]{\underline{#1}}
+
+\title{GSep}
+\author{John Wickerson}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\newcommand{\ret}{\texttt{ret}}
+\newcommand{\WR}{\mathop{\mathit{wr}}}
+\newcommand{\RD}{\mathop{\mathit{rd}}}
+
+\section{Separation Logic with Modules and Abstract Predicates}
+
+%\subsection{Semantic model}
+% \[
+% \begin{array}{rclcl}
+% X &∈& \mathbb{LV} \\
+% x &∈& \mathbb{PV} \\
+% % && \mathbb{V} &\eqdef& \mathbb{LV} ∪ \mathbb{PV} \\
+% v &∈& {\sf Val} \\
+% C &∈& {\sf Com} \\
+% C &∈& {\sf ClosedCom} &\eqdef& \{C∈{\sf Com}\mid \mods(C) = ∅\} \\
+% α &∈& \mathbb{A} \\
+% \arity{} &:& & & \mathbb{A} → \mathbb{N} \\
+% f &∈& \mathbb{F} \\
+% \arity{} &:& & & \mathbb{F} → \mathbb{N} \\
+% s &∈& {\sf Store} &\eqdef& \mathbb{PV} → {\sf Val} \\
+% h &∈& {\sf Heap} &\eqdef& \mathbb{N} \rightharpoonup {\sf Val} \\
+% %i &∈& {\sf LogEnv} &\eqdef& \mathbb{LV} → {\sf Val} \\
+% %σ &∈& {\sf State} &\eqdef& {\sf Store} × {\sf Heap} × {\sf LogEnv} \\
+% Π &∈& {\sf PredEnv} &\eqdef& (a:\mathbb{A}) → {\sf Val}^{\arity(a)} → {\sf Store} → {\sf Heap} → 2 \\
+% Δ,P,Q &∈& {\sf Assn} \\
+% ⊧ &:&  & & {\sf Assn} → {\sf PredEnv} → {\sf Store} → {\sf Heap} → 2 \\
+% %\bold P, \bold Q &∈& {\sf ParaAssn} &\eqdef& {\sf Val}^* → {\sf Assn} \\
+% F &∈& {\sf ProcImps} &\eqdef& (f:\mathbb{F}) → ({\sf Val}^{\arity(f)} → {\sf ClosedCom}) \\
+% Γ &∈& {\sf ProcSpecs} &\eqdef& (f:\mathbb{F}) \rightharpoonup (({\sf Val}^{\arity(f)} → {\sf Assn}) × ({\sf Val}^{\arity(f)} → {\sf Assn})) \\
+% \end{array}
+% \]
+
+Let $x$ range over the set $\mathbb{LV}$ of logical variables, and $X$ range over the set $\mathbb{PV}$ of program variables. Let $v$ range over a set ${\sf Val}$ of values. Let $C$ range over a language ${\sf Com}$ of commands. 
+\[
+C ::= C;C \mid \ang{C} \mid C+C \mid C^* \mid c \mid \texttt{let} (k_i = C_i)_{i∈n} \texttt{in} C \mid \texttt{call} k
+\]
+Let $k$ range over a set $\mathbb{K}$ of procedure identifiers. Let $K$ range over the set 
+\[
+{\sf ProcImps} \eqdef \mathbb{K} → {\sf Com}
+\]
+of procedure implementations that associate each procedure identifier with a closed command. We have a small-step operational semantics for commands. 
+\begin{mathpar}
+(C,σ) →_K (C',σ')   \and    (C,σ) →_K \emph{fault}
+\end{mathpar}
+Let $s$ range over the set ${\sf Store} \eqdef \mathbb{PV} → {\sf Val}$ of mappings from program variables to values. Let $h$ range over the set ${\sf Heap} \eqdef \mathbb{N} \rightharpoonup {\sf Val}$ of partial mappings from heap locations (natural numbers) to values. Let $α$ range over a set $\mathbb{A}$ of abstract predicate identifiers. Let $Π$ range over the set 
+\[
+{\sf PredEnv} \eqdef \mathbb{A} → \pow({\sf Store} × {\sf Heap})
+\]
+of predicate environments that associate each abstract predicate with a set of states that it satisfies. Let $P,Q$ range over a language ${\sf Assn}$ of assertions.
+\[
+P ::= P * P \mid α \mid \dots
+\]
+There exists a forcing relation $s,h ⊧_Π P$ that describes when a state $(s,h)$ satisfies an assertion $P$ which may refer to abstract predicates defined in $Π$.
+\begin{mathpar}
+s,h ⊧_Π P*Q \eqdef ∃h_0,h_1．h = h_0 \uplus h_1 ∧ s,h_0 ⊧_Π P ∧ s,h_1 ⊧_Π Q
+\and
+s,h ⊧_Π α \eqdef (s,h) ∈ Π(α)
+\end{mathpar}
+Let $Δ$ range over the set ${\sf PredDict} = \mathbb{A} \rightharpoonup {\sf Assn}$ of abstract predicate dictionaries that associate some abstract predicates with an assertion. We write $Π ⊧ Δ$ to mean 
+\[
+∀(α↦P) ∈ Δ．Π(α) = \{(s,h) \mid s,h ⊧_Π P\}.
+\]
+We write $Δ ⊧ P⇒Q$ to mean 
+\[
+∀Π⊧Δ．∀s,h．(s,h)⊧_Π P ⇒ (s,h)⊧_Π Q.
+\]
+Let $Γ$ range over the set 
+\[
+{\sf ProcSpecs} \eqdef \mathbb{K} \rightharpoonup ({\sf Assn} × {\sf Assn})
+\]
+of procedure specifications that associate some procedure identifiers with a pre- and postcondition.
+
+
+\newcommand{\safe}{\mathop{\mathit{safe}}}
+
+\begin{defn} $\safe(Q,K,Π)$ is the largest set such that if $(C,s,h) ∈ \safe(Q,K,Π)$ then:
+\begin{itemize}
+\item $∀h_o,h_1．h\uplus h_o = h_1 ⟹ ¬\ang{C,(s,h_1)}→_K\emph{fault}$
+\item $C = \Skip ⟹ (s,h) ⊧_Π Q$
+\item $∀C',s',h',h_o,h_1．h\uplus h_o = h_1 ∧ \ang{C,(s,h_1)}→_K\ang{C',(s',h'_1)} ⟹ ∃h'．h' \uplus h_o = h'_1 ∧ (C',s',h') ∈ \safe(Q,K,Π)$
+\end{itemize}
+\end{defn}
+
+% \begin{defn}\label{defn:sep_spec_inner}
+% \[
+% \ml{
+% Δ ⊧_K \{P\}\,C\,\{Q\}  \eqdef 
+% \ml{
+% ∀s,h,Π．\\
+% \text{if } Π⊧Δ \text{ and } s,h ⊧_Π P \\
+% \text{then } \ml{ ∀h_o,h_1．h\uplus h_o = h_1 ⟹ ¬\ang{C,s,h_1,K}\lightning \\
+% \text{and } \ml{ ∀s',h',h_o,h_1．\\
+% \text{if } h\uplus h_o = h_1 ∧ \ang{C,s,h_1,K}⇓(s',h'_1) \\ 
+% \text{then } ∃h'．h' \uplus h_o = h'_1 ∧ s',h' ⊧_Π Q}
+% }
+% }
+% }
+% \]
+% \end{defn}
+
+\begin{defn}
+\[
+Π;K ⊧ \{P\}\,C\,\{Q\}  \eqdef  ∀(s,h) ⊧_Π P． (C,s,h) ∈ \safe(Q,K,Π) 
+\]
+\end{defn}
+
+\begin{defn}
+\[
+\ml{
+K ⊧_Π Γ ~\eqdef~ ∀\{P\}\,k\,\{Q\}∈Γ．Π;K ⊧ \{P\}\,K\,k\,\{Q\}
+}
+\]
+\end{defn}
+
+\begin{defn}\label{defn:sep_spec}
+\[
+Δ;Γ⊧\{P\}\,C\,\{Q\}  \eqdef  ∀Π ⊧ Δ． ∀K ⊧_Π Γ． Π;K ⊧  \{P\}\,C\,\{Q\}
+\]
+\end{defn}
+
+% \subsection{Proof rules}
+
+%All the normal ones, plus the hypothetical frame rule, below. I've adapted the rule to include a $C_{\rm init}$ command that initialises all the variables declared at the top level of the module.
+
+% We have the following proof rule.
+
+% \[
+% \inferrule[HypFrame]{
+% (Δ;Γ ⊦ \{P_i * R\}\,C_i\,\{Q_i * R\})_{i∈n} \\\\
+% Δ;Γ⊦\{P\}\,C_{\rm init}\,\{P'*R\} \\\\
+% Δ;Γ⊦\{Q'*R\}\,C_{\rm final}\,\{Q\} \\\\
+% Δ; Γ,(\{P_i\}\,f_i\,\{Q_i\})_{i∈n} ⊦ \{P'\}\,C\,\{Q'\}}
+% {Δ;Γ ⊦ \{P\}\,\texttt{module} (C_{\rm init};(f_i = C_i)_{i∈n};C_{\rm final}) \texttt{in} C\,\{Q\}}
+% \]
+
+
+\section{GSep}
+
+\subsection{Extension to semantic model}
+
+Define $X \otimes Y \eqdef \{(x,y)\mid x\perp y\}$. Let $π$ range over the set 
+\[
+{\sf GPredEnv} \eqdef \mathbb{A} → \pow({\sf Store} × ({\sf Heap} \otimes {\sf Heap}))
+\]
+of GSep predicate environments that associate each abstract predicate with a set of GSep states it satisfies. If $π∈{\sf GPredEnv}$ then $\loc{π}$ and $\sha{π}$ are elements of {\sf PredEnv} such that 
+\begin{mathpar}
+\loc{π}(α) = \{(s,h_L)\mid ∃h_S．(s,h_L,h_S) ∈ π(α)\}
+\and
+\sha{π}(α) = \{(s,h_S)\mid (s,∅,h_S) ∈ π(α)\}
+\end{mathpar}
+and if $Π ∈ {\sf PredEnv}$ then $\lift{Π}$ is an element of {\sf GPredEnv} such that
+\[
+\lift{Π}(α) = \{(s,h_L,h_S)\mid h_S\perp h_L ∧ (s,h_L) ∈ Π(α)\}.
+\]
+\begin{lemma}
+ $π(α) ⊆ \lift{\loc{π}}(α)$ for all $α$
+\end{lemma}
+\begin{proof}
+Fix arbitrary $α$, $s$, $h_L$ and $h_S$.
+\begin{eqnarray*}
+(s,h_L,h_S) ∈ \lift{\loc{π}}(α) &=& h_S \perp h_L ∧ (s,h_L) ∈ \loc{π}(α) \\
+&=& h_S \perp h_L ∧ (∃h_S．(s,h_L,h_S) ∈ π(α)) \\
+&⇐& (s,h_L,h_S) ∈ π(α)
+\end{eqnarray*}
+\end{proof}
+\begin{lemma}
+$\loc{\lift{Π}} = Π$
+\end{lemma}
+\begin{proof} Fix arbitrary $α$, $s$ and $h_L$.
+\begin{eqnarray*}
+(s,h_L) ∈ \loc{\lift{Π}}(α) &=& ∃h_S．(s,h_L,h_S) ∈ \lift{Π}(α) \\
+&=& ∃h_S．h_S \perp h_L ∧ (s,h_L) ∈ Π(α) \\
+&=& (s,h_L) ∈ Π(α)
+\end{eqnarray*}
+\end{proof}
+Let $G$ range over the set {\sf Guar} of binary relations on ${\sf Heap}$. Let $p,q$ range over a language {\sf GAssn} of GSep assertions. 
+\[
+p ::= \boxed{P} \mid P \mid p*p \mid \underline{α} \mid \dots
+\]
+There exists a forcing relation $s,h_L,h_S ⊧_π p$ that describes when a GSep state $(s,(h_L,h_S))$ satisfies a GSep assertion $p$ which may refer to abstract predicates defined in $π$.
+\begin{mathpar}
+s,h_L,h_S ⊧_π P \eqdef s,h_L ⊧_{\loc{π}} P
+\and
+s,h_L,h_S ⊧_π \boxed{P} \eqdef s,h_S ⊧_{\sha{π}} P ∧ h_L=∅
+\and
+s,h_L,h_S ⊧_π p*q \eqdef ∃h'_L,h''_L．h_L = h'_L \uplus h''_L ∧ s,h'_L,h_S ⊧_π p ∧ s,h''_L,h_S ⊧_π q
+\and
+s,h_L,h_S ⊧_π \underline{α} \eqdef (s,h_L,h_S) ∈ π(α)
+\end{mathpar}
+Let $δ$ range over the set ${\sf GPredDict} = \mathbb{A} \rightharpoonup {\sf GAssn}$ of abstract predicate dictionaries that associate some abstract predicates with a GSep assertion. Note that every {\sf PredDict} is a {\sf GPredDict}. We write $π ⊧ δ$ to mean 
+\[
+∀(α↦p) ∈ δ．π(α) = \{(s,h_L,h_S) \mid s,h_L,h_S ⊧_π p\}.
+\]
+\begin{lemma}
+$Π⊧Δ$ iff $\lift{Π} ⊧ Δ$.
+\end{lemma}
+\begin{proof}
+\begin{eqnarray*}
+\lift{Π} ⊧ Δ &=& ∀(α↦P) ∈ Δ．\lift{Π}(α) = \{(s,h_L,h_S)\mid s,h_L,h_S ⊧_{\lift{Π}} P\} \\
+&=& ∀(α↦P) ∈ Δ．∀s,h_L,h_S．(h_S\perp h_L ∧ (s,h_L)∈Π(α)) ⇔ s,h_L,h_S ⊧_{\lift{Π}} P \\ 
+&=& ∀(α↦P) ∈ Δ．∀s,h_L,h_S．(h_S\perp h_L ∧ (s,h_L)∈Π(α)) ⇔ s,h_L ⊧_{\loc{\lift{Π}}} P \\ 
+&=& ∀(α↦P) ∈ Δ．∀s,h_L,h_S．(h_S\perp h_L ∧ (s,h_L)∈Π(α)) ⇔ s,h_L ⊧_Π P \\ 
+&=& ∀(α↦P) ∈ Δ．∀s,h_L．(∃h_S．h_S\perp h_L ∧ (s,h_L)∈Π(α)) ⇔ s,h_L ⊧_Π P \\ 
+&=& ∀(α↦P) ∈ Δ．∀s,h_L．(s,h_L)∈Π(α) ⇔ s,h_L ⊧_Π P \\ 
+&=& Π ⊧ Δ 
+\end{eqnarray*}
+\end{proof}
+\begin{lemma}
+$π⊧Δ$ iff $\loc{π} ⊧ Δ$.
+\end{lemma}
+\begin{proof}
+\begin{eqnarray*}
+\loc{π} ⊧ Δ &=& ∀(α↦P) ∈ Δ．∀s,h_L．(s,h_L)∈\loc{π}(α) ⇔ s,h_L ⊧_{\loc{π}} P \\
+&=& ∀(α↦P) ∈ Δ．∀s,h_L．(s,h_L)∈\loc{π}(α) ⇔ s,h_L ⊧_{\loc{π}} P \\
+&=& ∀(α↦P) ∈ Δ．∀s,h_L．(∃h_S．(s,h_L,h_S) ∈ π(α)) ⇔ s,h_L ⊧_{\loc{π}} P \\
+&=& ∀(α↦P) ∈ Δ．∀s,h_L,h_S．(s,h_L,h_S) ∈ π(α) ⇔ s,h_L ⊧_{\loc{π}} P \\
+&=& ∀(α↦P) ∈ Δ．π(α) = \{(s,h_L,h_S)\mid s,h_L ⊧_{\loc{π}} P\} \\
+&=& ∀(α↦P) ∈ Δ．π(α) = \{(s,h_L,h_S)\mid s,h_L,h_S ⊧_π P\}
+\end{eqnarray*}
+\end{proof}
+We write $δ ⊧_{\sf G} p⇒q$ to mean 
+\[
+∀π⊧δ．∀s,h_L,h_S．(s,h_L,h_S)⊧_π p ⇒ (s,h_L,h_S)⊧_π q.
+\]
+\begin{lemma}
+In the case where $p$ and $q$ are local assertions and $δ$ is a local predicate dictionary, we have:
+\[
+(Δ ⊧_{\sf G} P⇒Q) = (Δ ⊧ P⇒Q)
+\]
+\end{lemma}
+\begin{proof}
+\begin{eqnarray*}
+Δ ⊧_{\sf G} P⇒Q &=& ∀π．π⊧Δ ⟹ ∀s,h_L,h_S．(s,h_L,h_S)⊧_π P ⇒ (s,h_L,h_S)⊧_π Q \\
+&=& ∀π．\loc{π}⊧Δ．∀s,h_L,h_S．(s,h_L,h_S)⊧_π P ⇒ (s,h_L,h_S)⊧_π Q \\
+&=& ∀π．\loc{π}⊧Δ．∀s,h_L,h_S．(s,h_L)⊧_{\loc{π}} P ⇒ (s,h_L)⊧_{\loc{π}} Q \\
+&=& ∀Π．Π⊧Δ．∀s,h_L,h_S．(s,h_L)⊧_Π P ⇒ (s,h_L)⊧_Π Q \\
+&=& Δ ⊧ P⇒Q
+\end{eqnarray*}
+\end{proof}
+As a result of the above lemma, we can drop the {\sf G} subscript in the sequel. Let $γ$ range over the set
+\[
+{\sf GProcSpecs} \eqdef \mathbb{K} \rightharpoonup ({\sf GAssn} × {\sf GAssn} × {\sf Guar})
+\]
+of procedure specifications that associate some procedure identifiers with a pre- and postcondition in {\sf GAssn} plus a guarantee. The following function converts an {\sf Assn} into an {\sf GAssn} by underlining all of the abstract predicates (thus allowing their values to range over the shared state not just the local state).
+\begin{mathpar}
+\pullout{P*Q} \eqdef \pullout{P} * \pullout{Q}
+\and
+\pullout{α} \eqdef \pullout{α}
+\and
+\dots
+\end{mathpar}
+We can convert elements of {\sf ProcSpecs} to elements of {\sf GProcSpecs} like so:
+\[
+Γ[G] = \{ \{P\}k\{Q\}[G] \mid \{P\}k\{Q\} ∈ Γ\}
+\]
+
+% We extend our model as follows:
+% \[
+% \begin{array}{rclcl}
+% %w &∈& {\sf World} &\eqdef& \{(σ_l,σ_s)\mid σ_l,σ_s ∈ {\sf State} ∧ σ_l \perp σ_s\} \\
+% π &∈& {\sf GPredEnv} &\eqdef& (α:\mathbb{A}) → ({\sf Val}^{\arity(α)} → \pow({\sf World})) \\
+% G &∈& {\sf Guar} &\eqdef& \pow({\sf World}×{\sf World}) \\
+% δ,p,q &∈& {\sf GAssn} &\eqdef& {\sf GPredEnv} → \pow({\sf World}) \\
+% γ &∈& {\sf GProcSpecs} &\eqdef& (f:\mathbb{F}) \rightharpoonup (\mathbb{PV}^{\arity(f)} → {\sf GAssn} × {\sf GAssn}) \\
+% \end{array}
+% \]
+
+\begin{defn} $\safe(q,K,π,G)$ is the largest set such that if $(C,s,h_L,h_S) ∈ \safe(q,K,π,G)$ then:
+\begin{itemize}
+\item $∀h_o,h．h_L\uplus h_S\uplus h_o = h ⟹ ¬\ang{C,(s,h)}→_K\emph{fault}$
+\item $C = \Skip ⟹ (s,h_L,h_S) ⊧_π q$
+\item $∀C',s',h'_S,h'_L,h_o,h．h_L\uplus h_S\uplus h_o = h ∧ \ang{C,(s,h)}→_K\ang{C',(s',h')} ⟹ ∃h'_L, h'_S．h'_L \uplus h'_S \uplus h_o = h' ∧ (h_S,h'_S) ∈ G ∧ (C',s',h'_L,h'_S) ∈ \safe(q,K,π,G)$
+\end{itemize}
+\end{defn}
+
+% \begin{defn}\label{defn:sep_spec_inner}
+% \[
+% \ml{
+% Δ ⊧_K \{P\}\,C\,\{Q\}  \eqdef 
+% \ml{
+% ∀s,h,Π．\\
+% \text{if } Π⊧Δ \text{ and } s,h ⊧_Π P \\
+% \text{then } \ml{ ∀h_o,h_1．h\uplus h_o = h_1 ⟹ ¬\ang{C,s,h_1,K}\lightning \\
+% \text{and } \ml{ ∀s',h',h_o,h_1．\\
+% \text{if } h\uplus h_o = h_1 ∧ \ang{C,s,h_1,K}⇓(s',h'_1) \\ 
+% \text{then } ∃h'．h' \uplus h_o = h'_1 ∧ s',h' ⊧_Π Q}
+% }
+% }
+% }
+% \]
+% \end{defn}
+
+\begin{defn}
+\[
+π;K ⊧ \{p\}\,C\,\{q\}[G]  \eqdef  ∀(s,h_L,h_S) ⊧_π p． (C,s,h_L,h_S) ∈ \safe(q,K,π,G) 
+\]
+\end{defn}
+
+\begin{defn}
+\[
+\ml{
+K ⊧_π γ ~\eqdef~ ∀\{p\}\,k\,\{q\}[G]∈γ．π;K ⊧ \{p\}\,K\,k\,\{q\}[G]
+}
+\]
+\end{defn}
+
+\begin{defn}\label{defn:sep_spec}
+\[
+δ;γ⊧\{p\}\,C\,\{q\}[G]  \eqdef  ∀π⊧δ．∀K ⊧_π γ．π;K ⊧ \{p\}\,C\,\{q\}[G]
+\]
+\end{defn}
+
+% \begin{defn}
+% \[
+% \ml{
+% δ;G ⊧_K \{p\}\,C\,\{q\}  \eqdef 
+% \ml{
+% ∀s,h_L,h_S,π．\\
+% \text{if } π⊧δ \text{ and } s,h_L,h_S ⊧_π p \\
+% \text{then } \ml{ ∀h_o,h．h_L\uplus h_S \uplus h_o = h ⟹ ¬\ang{C,s,h,K}\lightning \\
+% \text{and } \ml{ ∀s',h',h_o,h．\\
+% \text{if } h_L\uplus h_S\uplus h_o = h ∧ \ang{C,s,h,K}⇓(s',h') \\ 
+% \text{then } ∃h'_L,h'_S．h'_L \uplus h'_S \uplus h_o = h' ∧ (h_S, h'_S) ∈ G ∧ s',h'_L,h'_S ⊧_Π q}
+% }
+% }
+% }
+% \]
+% \end{defn}
+
+% \begin{defn}
+% \[
+% \ml{
+% K ⊧ (γ,δ,G) ~\eqdef~ ∀\{p\}\,k\,\{q\}∈γ．δ;G ⊧_K \{p\}\,K\,k\,\{q\}
+% }
+% \]
+% \end{defn}
+
+% \begin{defn}
+% \[
+% δ;γ;G ⊧ \{p\}\,C\,\{q\}  \eqdef  ∀K ⊧ (γ,δ,G)． δ ⊧_K  \{p\}\,C\,\{q\}
+% \]
+% \end{defn}
+
+
+% \subsection{Additional proof rules}
+
+% \noindent Weakening the environment:
+% \[
+% \inferrule*[right=Env-Weaken]
+% {δ';γ';G' ⊦ \{p\}\,C\,\{q\} \\ δ ⇒ δ' \\ γ ⇒ γ' \\ G' ⊆ G}
+% {δ;γ;G ⊦ \{p\}\,C\,\{q\}}
+% \]
+
+% \noindent Rule of consequence:
+% \[
+% \inferrule*[right=Conseq]
+% {δ;γ;G ⊦ \{p\}\,C\,\{q\} \\ (δ ∧ p) ⇒ p' \\ (δ ∧ q') ⇒ q}
+% {δ;γ;G ⊦ \{p\}\,C\,\{q\}}
+% \]
+
+% \noindent Frame rule
+% \[
+% \inferrule*[right=Frame]
+% {δ;γ;G ⊦ \{p\}\,C\,\{q\} \\ r \text{stable under} G}
+% {δ;γ;G ⊦ \{p*r\}\,C\,\{q*r\}}
+% \]
+
+% \noindent Region update
+% \[
+% \inferrule*[right=RegUpdate]
+% {δ;γ ⊦ \{P*P'\}\,C\,\{∃x．Q*Q'\} \\ (P \rightsquigarrow ∃x．Q) ⊆ G \\ P, Q  \text{precise}}
+% {δ;γ;G ⊦ \{\boxed{R*P}*P'\}\,C\,\{∃x．\boxed{R*Q}*Q'\}}
+% \]
+
+
+
+% \noindent Converting between sequential and GSep specifications
+% \begin{mathpar}
+% \inferrule*[right=Basic]{Δ;Γ⊦\{P\}\,C\,\{Q\}}{G;Δ;Γ ⊦ \{P\}\,C\,\{Q\}}
+% \and
+% \inferrule*[right=Erase]{G;Δ;Γ⊦\{P\}\,C\,\{Q\}}{Δ;Γ ⊦ \{P\}\,C\,\{Q\}}
+% \end{mathpar}
+
+\section{Proof rules}
+
+
+\begin{mathpar}
+\inferrule[Underline]{
+}{
+Δ ⊧ \underline{P} ⇒ P
+}
+\and
+\inferrule[G-Erase]{
+Δ;Γ[G] ⊦ \{P*\boxed{P'}\}\,C\,\{Q*\boxed{Q'}\}[G]
+}{
+Δ;Γ ⊦ \{P*P'\}\,C\,\{Q*Q'\}
+}
+\and
+\inferrule[G-Basic]{
+Δ;Γ ⊦ \{P\}\,C\,\{Q\}
+}{
+Δ;Γ[G] ⊦ \{P\}\,C\,\{Q\}[G]
+}
+\and
+\inferrule[Proc-Conseq]{
+δ ⊧ p' ⇒ p \\ δ ⊧ q ⇒ q' \\ G ⊆ G' \\\\ δ;γ\uplus\{p'\}k\{q'\}[G'] ⊦ \{p_0\}\,C\,\{q_0\}[G_0]
+}{
+δ;γ\uplus\{p\}k\{q\}[G] ⊦ \{p_0\}\,C\,\{q_0\}[G_0]
+}
+\and
+\inferrule[Conseq]{
+δ ⊧ p ⇒ p' \\ δ ⊧ q' ⇒ q \\ G' ⊆ G \\\\ δ;γ ⊦ \{p'\}\,C\,\{q'\}[G']
+}{
+δ;γ ⊦ \{p\}\,C\,\{q\}[G]
+}
+\and
+\inferrule[G-PredE]{
+δ\uplus δ';Γ ⊦ \{p\}\,C\,\{q\}[G] \\\\ ∀α∈\dom(δ')．α∉δ,Γ,p,q 
+}{
+δ;Γ ⊦ \{p\}\,C\,\{q\}[G]
+}
+\and
+\inferrule[G-PredI]{
+δ;Γ ⊦ \{p\}\,C\,\{q\}[G]
+}{
+δ\uplus δ';Γ ⊦ \{p\}\,C\,\{q\}[G]
+}
+\and
+\inferrule[G-HypFrame] {
+δ;Γ \uplus (\{p_i\}k_i\{q_i\}[G_i])_{i∈n} ⊦ \{p\}\,C\,\{q\}[G]
+}{
+δ;Γ \uplus (\{p_i*r\}k_i\{q_i*r\}[G_i])_{i∈n} ⊦ \{p*r\}\,C\,\{q*r\}[G]
+}
+\and
+\inferrule[G-Let] {
+(δ;γ ⊦ \{p_i\}\,C_i\,\{q_i\}[G])_{i∈n}
+\\\\
+δ;γ \uplus (\{p_i\}k_i\{q_i\}[G])_{i∈n} ⊦ \{p\}\,C\,\{q\}[G]
+}{
+δ;γ ⊦ \{p\}\,\texttt{let} (f_i = C_i)_{i∈n} \texttt{in} C\,\{q\}[G]
+}
+\end{mathpar}
+
+\noindent The following rule....
+
+\[
+\inferrule[G-DerivModule] {
+(Δ\uplus δ;Γ ⊦ \{ \pullout{P_i} * \boxed{R}\}\,C_i\,\{\pullout{Q_i} * \boxed{R}\}[G])_{i∈n}
+\\\\
+Δ;Γ \uplus (\{P_i\}k_i\{Q_i\})_{i∈n} ⊦ \{P\}\,C\,\{Q\}
+}{
+Δ;Γ ⊦ \{P*R\}\,\texttt{let} (f_i = C_i)_{i∈n} \texttt{in} C\,\{Q*R\} 
+}
+\]
+
+\noindent ... can be derived like so:
+
+\[
+\inferrule*[Right=G-Let] {
+(Δ \uplus δ;Γ ⊦ \{ \pullout{P_i} * \boxed{R}\}\,C_i\,\{\pullout{Q_i} * \boxed{R}\}[G])_{i∈n} 
+\\
+\inferrule*[Right=HypFrame] { 
+\inferrule*[Right=Proc-Conseq] {
+\dom(δ) = {\textstyle \bigcup_{i∈n} ap(P_i ∨ Q_i)}
+\\
+\inferrule*[Right=G-PredI] {
+\inferrule*[Right=G-Basic] {
+Δ;Γ \uplus (\{P_i\}k_i\{Q_i\})_{i∈n} ⊦ \{P\}\,C\,\{Q\}
+}{
+Δ;Γ[G] \uplus (\{P_i\}k_i\{Q_i\}[G])_{i∈n} ⊦ \{P\}\,C\,\{Q\}[G]
+}
+}{
+Δ\uplus δ;Γ[G] \uplus (\{P_i\}k_i\{Q_i\}[G])_{i∈n} ⊦ \{P\}\,C\,\{Q\}[G]
+}
+}{
+Δ\uplus δ;Γ[G] \uplus (\{\pullout{P_i}\}k_i\{\pullout{Q_i}\}[G])_{i∈n} ⊦ \{P\}\,C\,\{Q\}[G]
+}
+}{
+Δ\uplus δ;Γ[G] \uplus (\{\pullout{P_i}*\boxed{R}\}k_i\{\pullout{Q_i}*\boxed{R}\}[G])_{i∈n} ⊦ \{P*\boxed{R}\}\,C\,\{Q*\boxed{R}\}[G]
+}
+}{
+\inferrule*[Right=G-PredE] {
+Δ\uplus δ;Γ[G] ⊦ \{P*\boxed{R}\}\,\texttt{let} (f_i = C_i)_{i∈n} \texttt{in} C\,\{Q*\boxed{R}\}[G]
+}{
+\inferrule*[Right=G-Erase] {
+Δ;Γ[G] ⊦ \{P*\boxed{R}\}\,\texttt{let} (f_i = C_i)_{i∈n} \texttt{in} C\,\{Q*\boxed{R}\}[G]
+}{
+Δ;Γ ⊦ \{P*R\}\,\texttt{let} (f_i = C_i)_{i∈n} \texttt{in} C\,\{Q*R\} 
+}
+}
+}
+\]
+
+\section{Soundness?}
+
+
+\subsection{Underline}
+
+Fix arbitrary $π⊧Δ$. Show $∀P．∀s,h_L,h_S．(s,h_L,h_S ⊧_π P) ⇐ (s,h_L,h_S ⊧_π \underline{P})$ by induction on $P$.
+
+Case $P = α$. Suppose $α∈\dom(Δ)$. Hence $(s,h_L,h_S) ∈ π(α) ⇔ s,h_L,h_S ⊧_π Δ(α)$.
+\begin{eqnarray*}
+s,h_L,h_S ⊧_π α &=& h_S \perp h_L ∧ s,h_L ⊧_{\loc{π}} α \\
+&=& h_S \perp h_L ∧ (s,h_L) ∈ {\loc{π}}(α) \\
+&=& h_S \perp h_L ∧ (∃h_S．(s,h_L,h_S) ∈ π(α)) \\
+&=& h_S \perp h_L ∧ (∃h_S．s,h_L,h_S ⊧_π Δ(α)) \\
+&=& h_S \perp h_L ∧ (∃h_S．s,h_L ⊧_{\loc{π}} Δ(α)) \\
+&=& h_S \perp h_L ∧ s,h_L ⊧_{\loc{π}} Δ(α) \\
+&=& s,h_L,h_S ⊧_π Δ(α) \\
+&=& (s,h_L,h_S) ∈ π(α) \\
+&=& s,h_L,h_S ⊧_π \underline{α}
+\end{eqnarray*}
+
+Case $P = P' * P''$.
+\begin{eqnarray*}
+s,h_L,h_S ⊧_π P'*P'' &=& ∃h'_L,h''_L．h_L = h'_L \uplus h''_L ∧ s,h'_L,h_S ⊧_π P' ∧ s,h''_L,h_S ⊧_π P'' \\
+&⇐& ∃h'_L,h''_L．h_L = h'_L \uplus h''_L ∧ s,h'_L,h_S ⊧_π \underline{P'} ∧ s,h''_L,h_S ⊧_π \underline{P''} \\
+&=& s,h_L,h_S ⊧_π \underline{P'}*\underline{P''} \\
+&=& s,h_L,h_S ⊧_π \underline{P'*P''}
+\end{eqnarray*}
+
+
+
+
+\begin{lemma}[G-Erase 1]
+If $s,h_L,h_S ⊧_Π \underline P$ then $s,h_L ⊧_Π P$.
+\end{lemma}
+
+\begin{lemma}[G-Erase 2]
+If $(C,s,h_L) ∈ \safe(Q,K,Π)$ then $(C,s,h_L,h_S) ∈ \safe(\underline Q,K,Π,G)$.
+\end{lemma}
+
+
+\subsection{G-Erase}
+
+Suppose $Δ⊧\{P\}C\{Q\}$. Show $G;Δ⊧\{\underline P\}C\{Q\}$. Fix arbitrary $K$. No procedure environment, so $K$ not used. Fix arbitrary $π$. Assume $π⊧Δ$. Then $π = Π$ for some $Π$. Assume $s,h_L,h_S ⊧_Π \underline P$. Then $s,h_L ⊧_Π P$ by lemma. So $(C,s,h_L) ∈ \safe(Q,K,Π)$ by assumption. Then we need $(C,s,h_L,h_S) ∈ \safe(\underline Q,K,Π,G)$ too.
+
+\end{document}

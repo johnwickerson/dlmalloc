@@ -1,0 +1,1429 @@
+\documentclass[10pt,twoside]{report}
+\usepackage[paperwidth=50cm, paperheight=150cm, margin=3cm]{geometry}
+
+\usepackage{JohnMath}
+\usepackage{mapsto}
+\usepackage{ribbonproof}
+\usepackage{calc}
+
+\usepackage{rotating}
+\newcommand{\mrot}[1]{\raisebox{1.7ex}{\turnbox{270}{\raisebox{1mm}{\ensuremath{#1}}}}}
+
+\usepackage[svgnames]{xcolor}
+% \usepackage{MnSymbol}
+
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Purple},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+\newcommand{\code}[1]{\texttt{#1}}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\newcommand{\checkthis}{$^{\rm [check\ this]}$}
+\renewcommand{\floor}[2][]{\left\lfloor{#2}\right\rfloor_{#1}}
+\renewcommand{\ceil}[2][]{\left\lceil{#2}\right\rceil_{#1}}
+\newcommand{\floorpow}[1]{\llfloor{#1}\rrfloor}
+\newcommand{\fracpow}[1]{\{\hspace{-3pt}\{{#1}\}\hspace{-3pt}\}}
+
+% STATUS FLAGS
+\newcommand{\setC}{\raisebox{1.5pt}{$\blacktriangledown$}}
+\newcommand{\unsetC}{\raisebox{1.5pt}{$\triangledown$}}
+\newcommand{\setP}{{\blacktriangle}}
+\newcommand{\unsetP}{{\triangle}}
+
+% BIT OPERATIONS
+\newcommand{\AND}{\mathbin{\texttt{\&}}}
+\newcommand{\OR}{\mathbin{\texttt{|}}}
+\newcommand{\NOT}{\mathbin{\textasciitilde}}
+\newcommand{\SHIFTRIGHT}{\mathbin{\texttt{>}\hspace{-1pt}\texttt{>}}}
+\newcommand{\SHIFTLEFT}{\mathbin{\texttt{<}\hspace{-1pt}\texttt{<}}}
+
+
+
+\newcommand{\rsem}[1]{{(\![}{#1}{]\!)}}
+\newcommand{\iterstar}[2][]{\text{\LARGE $*$}^{#1}_{#2}}
+
+\newcommand{\defined}{\mathop{\text{def}}}
+
+\newcommand{\SET}[2]{\left\{\begin{array}{@{}l|l@{}} #1 & #2 \end{array}\right\}}
+
+\newenvironment{mapping}{\left\{ \begin{array}{@{}r@{\,↦\,}l@{}}}{\end{array}\right\}}
+
+%\newcommand{\block}[1]{\smash{\overbracket[0.5pt][2pt]{\underscore\,\ldots\,\underscore}^{#1}}}
+
+\newcommand{\ret}{\texttt{ret}}
+
+\newcommand{\malloc}{{\tt malloc}}
+\newcommand{\sbrk}{{\tt sbrk}}
+\newcommand{\free}{{\tt free}}
+\newcommand{\ls}[2][]{#1 \twoheadrightarrow #2}
+\newcommand{\A}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize a}}}{\rightarrow}}} #2}
+\newcommand{\U}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize u}}}{\rightarrow}}} #2}
+\newcommand{\B}[2][]{#1 {\rightarrow} #2}
+\newcommand{\E}[2]{#2 \mathbin{\raisebox{2pt}{$\curvearrowleft$}} #1}
+\newcommand{\s}{{\tt s}}
+\renewcommand{\t}{{\tt t}}
+\newcommand{\temp}{{\tt temp}}
+\newcommand{\p}{{\tt p}}
+\newcommand{\q}{{\tt q}}
+\renewcommand{\v}{{\tt v}}
+\newcommand{\brk}{\mathop{\emph{brk}}}
+\newcommand{\brka}{\mathop{\emph{brka}}}
+\newcommand{\n}{{}\\{} \hfill }
+\newcommand{\nw}{{\tt nw}}
+\newcommand{\ap}{{\tt ap}}
+\newcommand{\nbytes}{{\tt nbytes}}
+\newcommand{\WORD}{{\tt WORD}}
+\newcommand{\mathceil}[1]{\left\lceil#1\right\rceil}
+\newcommand{\ptoU}{\mathbin{↦_{\sf u}}}
+\newcommand{\ptoA}{\mathbin{↦_{\sf a}}}
+\newcommand{\ptoS}{\mathbin{↦_{\sf s}}}
+
+
+
+
+\title{A proof of Doug Lea's memory manager}
+\author{John Wickerson}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\pagestyle{headings}
+
+\chapter{Glossary of macros, typedefs and minor routines}\label{chap:glossary}
+
+\renewcommand{\arraystretch}{1.2}
+
+\begin{tt}
+\begin{longtable}{l@{ $=$ }L}
+MALLOC\_ALIGNMENT & 8 \\
+MAX\_SIZE\_T & FFFF\ FFFF_h \\
+SIZE\_T\_SIZE & 4 \\
+SIZE\_T\_BITSIZE & 32 \\
+SIZE\_T\_ZERO & 0 \\
+SIZE\_T\_ONE & 1 \\
+SIZE\_T\_TWO & 2 \\
+SIZE\_T\_FOUR & 4 \\
+TWO\_SIZE\_T\_SIZES & 8 \\
+FOUR\_SIZE\_T\_SIZES & 16 \\
+SIX\_SIZE\_T\_SIZES & 24 \\
+HALF\_MAX\_SIZE\_T & 7FFF\ FFFF_h \\
+CHUNK\_ALIGN\_MASK & 111_b \\
+mchunk & \text{struct malloc\_chunk} \\
+mchunkptr & \text{mchunk*} \\
+sbinptr & \text{mchunk*} \\
+bindex\_t & \text{unsigned int} \\
+binmap\_t & \text{unsigned int} \\
+flag\_t & \text{unsigned int} \\
+MCHUNK\_SIZE & 16 \\
+CHUNK\_OVERHEAD & 4 \\
+MIN\_CHUNK\_SIZE & 16 \\
+chunk2mem(p) & {\tt p} + 8 \\
+mem2chunk(mem) & {\tt mem} - 8 \\
+MAX\_REQUEST & 2^{32}-63 \\
+MIN\_REQUEST & 11 \\
+pad\_request(req) & \ceil[8]{{\tt req}+4} \\
+request2size(req) & \max\{16, \ceil[8]{{\tt req}+4}\} \\
+PINUSE\_BIT & 1_b \\
+CINUSE\_BIT & 10_b \\
+FLAG4\_BIT & 100_b \\
+INUSE\_BITS & 11_b \\
+FLAG\_BITS & 111_b \\
+cinuse(p) & [{\tt p}_{[1]}] == 1 \\
+pinuse(p) & [{\tt p}_{[0]}] == 1 \\
+is\_inuse(p) & \texttt{is\_mmapped(p)} ∨ \texttt{cinuse(p)} \\
+is\_mmapped(p) & [{\tt p}_{[1,0]}] == 00 \\
+chunksize(p) & [({\tt p}+1)_{[31..3]}000] \\
+\Seqspec{{\tt p}_{[0]} ↦ \underscore}{clear\_pinuse(p)}{{\tt p}_{[0]} ↦ 0} \\
+chunk\_plus\_offset(p,s) & p + s \\
+chunk\_minus\_offset(p,s) & p - s \\
+next\_chunk(p) & next({\tt p}) \\
+prev\_chunk(p) & prev({\tt p}) \\
+next\_pinuse(p) & flags(next({\tt p})) = \_\setP \\
+get\_foot(p,s) & prev\_foot({\tt p} + {\tt s}) \\
+\Seqspec{prev\_foot({\tt p} + {\tt s}) = \_ }{set\_foot(p,s)}{prev\_foot({\tt p} + {\tt s}) = {\tt s}} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p})=\_\_ {}\\{} ∧ prev\_foot({\tt p}+{\tt s})=\_}{set\_size\_and\_pinuse\_of\_free\_chunk(p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p})=\unsetC\setP {}\\{} ∧ prev\_foot(next({\tt p}))={\tt s}} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p})=\_\_ {}\\{} ∧ prev\_foot({\tt p}+{\tt s})=\_ {}\\{} ∧ flags({\tt p}+{\tt s})=\_\_}{set\_free\_with\_pinuse(p,s,n)}{size({\tt p})={\tt s} ∧ flags({\tt p})=\unsetC\setP {}\\{} ∧ prev\_foot(next({\tt p}))={\tt s} {}\\{} ∧ flags(next({\tt p}))=\_\unsetP} \\
+tchunk & \text{malloc\_tree\_chunk} \\
+tchunkptr & \text{tchunk*} \\
+tbinptr & \text{tchunk*} \\
+leftmost\_child(t) & \left\{\begin{array}{ll}child_0({\tt *t}) & \textrm{if $child_0({\tt *t}) ≠ 0$} \\ child_1({\tt *t}) & \textrm{otherwise}\end{array}\right. \\
+NSMALLBINS & 32 \\
+NTREEBINS & 32 \\
+SMALLBIN\_SHIFT & 3 \\
+SMALLBIN\_WIDTH & 8 \\
+TREEBIN\_SHIFT & 8 \\
+MIN\_LARGE\_SIZE & 256 \\
+MAX\_SMALL\_SIZE & 255 \\
+MAX\_SMALL\_REQUEST & 244 \\
+mstate & \text{struct malloc\_state} \\
+mparams & \text{struct malloc\_params} \\
+is\_small(s) & {\tt s} < 256 \\
+small\_index(s) & \floor{{\tt s}/8} \\
+small\_index2size(i) & 8×{\tt i} \\
+MIN\_SMALL\_INDEX & 2 \\
+\Seqspec{{\tt smallbins}[2{\tt i}+2]↦C_1 * {\tt smallbins}[2{\tt i}+3]↦C_2}{x := smallbin\_at(M,i)}{{\tt x}.{\tt fd} ↦ C_1 * {\tt x}.{\tt bk} ↦ C_2} \\
+treebin\_at(M,i) & {\tt treebins}[{\tt i}] \\
+\Seqspec{{\tt I}=\_}{compute\_tree\_index(S,I)}{{\tt I}=\left\{\begin{array}{ll} 0 & \textrm{if ${\tt S}<256$} \\ 31 & \textrm{if ${\tt S}>2^{24}$} \\ 2(\log_2{\floorpow{{\tt S}}-8}) & \textrm{if $0≤\fracpow{{\tt S}} < \tfrac{1}{2}\floorpow{{\tt S}}$} \\ 2(\log_2{\floorpow{{\tt S}}-8})+1 & \textrm{if $\tfrac{1}{2}\floorpow{{\tt S}} ≤\fracpow{{\tt S}} < \floorpow{{\tt S}}$} \end{array}\right.}\\ 
+bin\_for\_tree\_index(i) & \left\{\begin{array}{ll}31 & \textrm{if ${\tt i}=31$} \\ \floor{{\tt i}/2}+6 & \textrm{otherwise}\end{array}\right. \\
+leftshift\_for\_tree\_index(i) & \left\{\begin{array}{ll}0 & \textrm{if ${\tt i}=31$} \\ 25-\floor{{\tt i}/2} & \textrm{otherwise}\end{array}\right. \\
+minsize\_for\_tree\_index(i) & \left\{\begin{array}{ll}2 \SHIFTLEFT (\floor{{\tt i}/2}+7) & \textrm{if ${\tt i}$ even} \\ 3 \SHIFTLEFT (\floor{{\tt i}/2}+7) & \textrm{if ${\tt i}$ odd}\end{array}\right. \\
+idx2bit(i) & 1 \SHIFTLEFT {\tt i} \\
+\Seqspec{{\tt smallmap}[{\tt i}]=\_}{mark\_smallmap(M,i)}{{\tt smallmap}[{\tt i}]=1} \\
+\Seqspec{{\tt smallmap}[{\tt i}]=\_}{clear\_smallmap(M,i)}{{\tt smallmap}[{\tt i}]=0} \\
+smallmap\_is\_marked(M,i) & {\tt smallmap}[{\tt i}]=1 \\
+\Seqspec{{\tt treemap}[{\tt i}]=\_}{mark\_treemap(M,i)}{{\tt treemap}[{\tt i}]=1} \\
+\Seqspec{{\tt treemap}[{\tt i}]=\_}{clear\_treemap(M,i)}{{\tt treemap}[{\tt i}]=0} \\
+treemap\_is\_marked(M,i) & {\tt treemap}[{\tt i}]=1 \\
+least\_bit(x) & \left\{\begin{array}{ll}\mathbf{0} \stackrel{i}{1}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if {\tt x}=0} \end{array}\right. \\
+left\_bits(x) & \left\{\begin{array}{ll}\mathbf{1} \stackrel{i}{0}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if ${\tt x}=0$}\end{array}\right. \\
+same\_or\_left\_bits(x) & \left\{\begin{array}{ll}\mathbf{1} \stackrel{i}{1}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if ${\tt x}=0$}\end{array}\right. \\
+\Seqspec{{\tt I}=\_}{compute\_bit2idx(X,I)}{{\tt X≠0} ⇒ {\tt I}=\log_2 {\tt X}} \\
+\Seqspec{p}{mark\_inuse\_foot(M,p,s)}{p} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p}) = \_P {}\\{} ∧ flags({\tt p}+{\tt s}) = C\_ }{set\_inuse(M,p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p}) = \setC P {}\\{} ∧ flags(next({\tt p})) = C\setP } \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p}) = \_\_ {}\\{} ∧ flags({\tt p}+{\tt s}) = C\_ }{set\_inuse\_and\_pinuse(M,p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p}) = \setC\setP {}\\{} ∧ flags(next({\tt p})) = C\setP } \\
+\Seqspec{size({\tt p})=\_ {}\\{} ∧ flags({\tt p}) = \_\_}{set\_inuse\_and\_pinuse\_of\_inuse\_chunk(M,p,s)}{size({\tt p})={\tt s} {}\\{} ∧ flags({\tt p}) = \setC\setP} \\
+\end{longtable}
+\end{tt}
+
+\chapter{State}
+
+\newcommand{\fd}[2]{{#1} \mapstosup{{\sf fd}} {#2}}
+\newcommand{\bk}[2]{{#1} \mapstosup{{\sf bk}} {#2}}
+\newcommand{\prevfoot}[2]{{#1} \mapstosup{{\sf prevfoot}} {#2}}
+\newcommand{\fdbk}{}
+\renewcommand{\size}[2]{{#1} \mapstosup{{\sf size}} {#2}}
+\newcommand{\pinuse}[2]{{#1} \mapstosup{{\sf pinuse}} {#2}}
+\newcommand{\cinuse}[2]{{#1} \mapstosup{{\sf cinuse}} {#2}}
+\newcommand{\smallsize}[1]{\lvert{#1}\rvert}
+\newcommand{\treesize}[1]{\lVert{#1}\rVert}
+\newcommand{\arena}[1]{{\it arena}({#1})}
+\newcommand{\sorted}[2]{{\it sorted}({#1},{#2})}
+\newcommand{\coallesced}[1]{{\it coallesced}({#1})}
+\newcommand{\state}[1]{{\it state}({#1})}
+\newcommand{\invariant}{{\it invariant}}
+\newcommand{\token}[2]{{\it token}({#1},{#2})}
+\newcommand{\block}[4][]{{\it block}^{#1}\ifthenelse{\equal{#2}{}}{}{({#2},{#3},{#4})}}
+\newcommand{\ublock}[4][]{{\it ublock}^{#1}\ifthenelse{\equal{#2}{}}{}{({#2},{#3},{#4})}}
+\newcommand{\ablock}[4][]{{\it ablock}^{#1}\ifthenelse{\equal{#2}{}}{}{({#2},{#3},{#4})}}
+\newcommand{\bin}[3]{{\it bin}({#1},{#2},{#3})}
+\newcommand{\bnode}[5][]{\ifthenelse{\equal{#1}{}}{{\it bnode}\,{#2}\,}{({\it bnode}\,{#2})^{#1}}({#3},{#4},{#5})}
+\newcommand{\smallbin}[2]{{\it smallbin}_{#1}({#2})}
+\newcommand{\treebin}[2]{{\it treebin}_{#1}({#2})}
+\newcommand{\uplusminus}{\mathbin{{\uplus}\!{-}}}
+
+
+Shorthand:
+\[
+\begin{array}{rcl}
+\smallsize i &\eqdef& \{8i\} \\
+\treesize i &\eqdef& \texttt{compute\_tree\_index}^{-1}(i) \\
+{\sf w} &\eqdef& 4 \\
+x \uplus y &\eqdef&  \begin{cases} x ∪ y & \text{if $x ∩ y = \{\}$} \\ \text{undefined} & \text{otherwise}\end{cases}\\
+x \uplusminus y &\eqdef&  \begin{cases} x-y & \text{if $y ⊆ x$} \\ \text{undefined} & \text{otherwise}\end{cases}
+\end{array}
+\]
+
+\noindent Predicates:
+
+\begin{longtable}{RCL}
+\prevfoot{x}{s} &\eqdef& x ↦ s
+\\
+\size{x}{s} &\eqdef& ∃n．(x+1{\sf w}) ↦_{[31..3]} n  *  8n=s
+\\
+\pinuse{x}{b} &\eqdef& (x+1{\sf w}) ↦_{[0]} b
+\\
+\cinuse{x}{b} &\eqdef& (x+1{\sf w}) ↦_{[1]} b
+\\
+\fd{x}{y} &\eqdef& x+2{\sf w} ↦ y 
+\\
+\bk{x}{y} &\eqdef& x+3{\sf w} ↦ y 
+\\
+\ublock{x}{y}{B} &\eqdef& \ml{{\sf let} s=y-x {\sf in} ∃n．B = \{x+2{\sf w} \ptoU n{\sf w}\}  *  (n+1){\sf w}=s {}\\{}
+*  \frac12(\size{x}{s})  *  \pinuse{y}{0}  *  \cinuse{x}{0} {}\\{}
+*  s≥4{\sf w}  *  \iterstar[s/{\sf w}]{i=4}．x+i{\sf w}↦\underscore  *  \prevfoot{y}{s} }
+\\
+\ablock{x}{y}{B} &\eqdef& \ml{{\sf let} s=y-x {\sf in} ∃n．B = \{x+2{\sf w} \ptoA n{\sf w}\}  *  (n+1){\sf w}≤s {}\\{}
+*  \frac12(\size{x}{s})  *  \pinuse{y}{1}  *  \cinuse{x}{1} {}\\{}
+*  s≥4{\sf w}  *  \iterstar[s/{\sf w}+1]{i=n+2}．x+i{\sf w}↦\underscore } 
+\\
+\block{}{}{} &\eqdef& {\ublock{}{}{}} ∨ {\ablock{}{}{}} 
+\\
+\bin{S}{x}{U} &\eqdef& \ml{ (U=\{\}  *  \fd{x}{\underscore}  *  \bk{x}{\underscore}) {}\\{}
+∨ (∃y．\fd{x}{y}  * \bk{y}{x}  *  \bnode[*]{S}{y}{x}{U}) } 
+\\
+\bnode{S}{x}{y}{U} &\eqdef& \ml{∃s．\fd{x}{y}  * \bk{y}{x}  *  U=\{x+2{\sf w} ↦ s-1{\sf w}\}  *  \frac12(\size{x}{s})  *  s ∈ S }
+\\
+\sorted{L}{\sqsubseteq} &\eqdef& ∀i,j．i≤j ⇒ L(i) \sqsubseteq L(j)
+\\ 
+\coallesced{B} &\eqdef& ∃L．\ran{L} = B  *  \sorted{L}{≤_1}  *  ∄i．(L(i))_3 = (L(i+1))_3 = {\sf u}
+\\
+\arena{B} &\eqdef& \ml{\coallesced{B}  *  \pinuse{\tt start}{1}  *  \prevfoot{\tt start}{\underscore} {}\\{} *  \block[*]{{\tt start}}{{\tt top}}{B}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore}} 
+\\
+\smallbin{i}{U} &\eqdef& i∈[0,32)  *  \bin{{\smallsize i}}{{\tt smallbin}+2i{\sf w}}{ U}  *  {\tt smallmap}_{[i]}=(U≠\{\}) 
+\\
+\treebin{i}{U} &\eqdef& i∈[0,32)  *  \bin{{\treesize i}}{{\tt treebins}+i{\sf w}}{U}  *  {\tt treemap}_{[i]}=(U≠\{\}) 
+\\
+\state{A} &\eqdef& ∃\{U_i\mid i∈[0,64)\}．\ml{\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*   \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}} 
+\\
+\invariant &\eqdef& \boxed{∃A．\state{A}} 
+\\
+\token{x}{n} &\eqdef& \boxed{∃A．\state{A \uplus \{x↦n\}}}  *  \frac12(\size{x-2{\sf w}}{\underscore})
+\end{longtable}
+
+\begin{lemma}\label{lem:coallesced} The assertion
+\[
+\block{x}{y}{B_1}  *  \ablock{y}{z}{B_2}  *  \coallesced{B_1\uplus B_2 \uplus B_3}\]
+implies
+\[
+\ublock{x}{y}{B_1}  *  \ablock{y}{z}{B_2}  *  \coallesced{B_1\uplus B_2 \uplus B_3}.
+\]
+\end{lemma}
+
+\chapter{Auxilliary operations}\label{chap:smallbins_and_trees}
+
+\section{\tt set\_inuse\_and\_pinuse}
+
+Specification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \pinuse{{\tt p}+{\tt s}}{\underscore}}£
+set_inuse_and_pinuse(M,p,s)
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}  *  \pinuse{{\tt p}+{\tt s}}{1}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \pinuse{{\tt p}+{\tt s}}{\underscore}}£
+p->head = (s|PINUSE_BIT|CINUSE_BIT);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}  *  \pinuse{{\tt p}+{\tt s}}{\underscore}}£
+((mchunkptr)(((char*)p) + s))->head |= PINUSE_BIT;
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}  *  \pinuse{{\tt p}+{\tt s}}{1}}£
+\end{lstlisting}
+
+\section{\tt set\_size\_and\_pinuse\_of\_free\_chunk}
+
+Specification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \prevfoot{{\tt p}+{\tt s}}{\underscore}}£
+set_size_and_pinuse_of_free_chunk(p,s)
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{0}  *  \prevfoot{{\tt p}+{\tt s}}{\tt s}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \prevfoot{{\tt p}+{\tt s}}{\underscore}}£
+p->head = (s|PINUSE_BIT);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{0}  *  \prevfoot{{\tt p}+{\tt s}}{\underscore}}£
+set_foot(p,s);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{0}  *  \prevfoot{{\tt p}+{\tt s}}{\tt s}}£
+\end{lstlisting}
+
+\section{\tt set\_size\_and\_pinuse\_of\_inuse\_chunk}
+
+Specification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}}£
+set_size_and_pinuse_of_inuse_chunk(M,p,s)
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}}£
+p->head = (s|PINUSE_BIT|CINUSE_BIT);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}}£
+\end{lstlisting}
+
+
+\section{\tt insert\_small\_chunk}
+
+Specification:
+\begin{lstlisting}
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{⌊{\tt S}/8⌋}}{U}}£
+insert_small_chunk(M,P,S) //mods={}
+£\ass{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{⌊{\tt S}/8⌋}}{U}}£
+bindex_t I  = small_index(S);
+£\ass{∃B．\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  B = {\tt smallbin}+2{\tt I}{\sf w}  *  0≤{\tt I}<32{}\\{}
+* \bin{{\smallsize {\tt I}}}{B}{U}  *  {\tt smallmap}_{[{\tt I}]}=(U≠\{\}) }£
+mchunkptr B = smallbin_at(M, I);
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  {\tt B} = {\tt smallbin}+2{\tt I}{\sf w}   *  0≤{\tt I}<32 {}\\{}
+* \bin{{\smallsize {\tt I}}}{{\tt B}}{U}  *  {\tt smallmap}_{[{\tt I}]}=(U≠\{\}) }£
+mchunkptr F = B;
+£\ass{∃F'．\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore} {}\\{}
+*  {\tt B} = {\tt smallbin}+2{\tt I}{\sf w}  *  {\tt F}={\tt B}   *  0≤{\tt I}<32 {}\\{}
+*  ((\fd{{\tt B}}{\underscore}  *  \bk{{\tt B}}{\underscore}  *  U=\{\}) {}\\{}
+∨ (\fd{{\tt B}}{F'}  * \bk{F'}{{\tt B}}  *  \bnode[*]{{\smallsize {\tt I}}}{F'}{{\tt B}}{U})) {}\\{}
+*  {\tt smallmap}_{[{\tt I}]}=(U≠\{\})  }£
+//assert(S >= MIN_CHUNK_SIZE);
+if (!smallmap_is_marked(M, I))
+  £\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  {\tt B} = {\tt smallbin}+2{\tt I}{\sf w}  *  {\tt F}={\tt B}   *  0≤{\tt I}<32 {}\\{}
+* \fd{{\tt B}}{\underscore}  *  \bk{{\tt F}}{\underscore}  *  \bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{{\tt B}}{U}  *  {\tt smallmap}_{[{\tt I}]}=0  *  U=\{\} }£
+  mark_smallmap(M, I);
+  £\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  {\tt B} = {\tt smallbin}+2{\tt I}{\sf w}   *  0≤{\tt I}<32{}\\{}
+* \fd{{\tt B}}{\underscore}  *  \bk{{\tt F}}{\underscore}  *  \bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{{\tt B}}{U}  *  {\tt smallmap}_{[{\tt I}]}=1  }£
+else //if (RTCHECK(ok_address(M, B->fd)))
+  £\ass{∃F．\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  {\tt B} = {\tt smallbin}+2{\tt I}{\sf w}   *  0≤{\tt I}<32 {}\\{}
+*  \fd{{\tt B}}{F}  *  \bk{F}{{\tt B}}  *  \bnode[*]{{\smallsize {\tt I}}}{F}{{\tt B}}{U}  *  {\tt smallmap}_{[{\tt I}]}=1  }£
+  F = B->fd;
+  £\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8{\tt I}  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  {\tt B} = {\tt smallbin}+2{\tt I}{\sf w}   *  0≤{\tt I}<32 {}\\{}
+* \fd{{\tt B}}{\underscore}  *  \bk{{\tt F}}{\underscore}  *  \bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{{\tt B}}{U}  *  {\tt smallmap}_{[{\tt I}]}=1  }£
+// else {
+//   CORRUPTION_ERROR_ACTION(M);
+// }
+£\ass{∃i．\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8i  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  {\tt B} = {\tt smallbin}+2i   *  0≤i<32{}\\{}
+* \fd{{\tt B}}{\underscore}  *  \bk{{\tt F}}{\underscore}  *  \bnode[*]{{\smallsize i}}{{\tt F}}{{\tt B}}{U}  *  {\tt smallmap}_{[i]}=1}£
+B->fd = P;
+F->bk = P;
+P->fd = F;
+P->bk = B;
+£\ass{∃i．\frac12(\size{{\tt P}}{ {\tt S}})  *  {\tt S} = 8i  *  {\tt B} = {\tt smallbin}+2i   *  0≤i<32 {}\\{}
+*  \fd{{\tt B}}{{\tt P}}  * \bk{{\tt P}}{{\tt B}}  *  \fd{{\tt P}}{{\tt F}}  *  \bk{{\tt F}}{{\tt P}} {}\\{}
+*  \bnode[*]{{\smallsize i}}{{\tt F}}{{\tt B}}{U}  *  {\tt smallmap}_{[i]}=1}£
+£\ass{∃i．{\tt S} = 8i  *  {\tt B} = {\tt smallbin}+2i   *  0≤i<32  *  \fd{{\tt B}}{{\tt P}}  *  \bk{{\tt P}}{ {\tt B}} {}\\{}
+*  \bnode[*]{{\smallsize i}}{{\tt P}}{{\tt B}}{U \uplus \{{\tt P}+2{\sf w} ↦ {\tt S}-1{\sf w}\}}  *  {\tt smallmap}_{[i]}=1}£
+£\ass{∃i．{\tt S} = 8i   *  0≤i<32 {}\\{}
+* \bin{{\smallsize i}}{{\tt smallbin}+2i}{U \uplus \{{\tt P}+2{\sf w} ↦ {\tt S}-1{\sf w}\}} {}\\{}
+*  {\tt smallmap}_{[i]}=(U \uplus \{{\tt P}+2{\sf w} ↦ {\tt S}-1{\sf w}\}≠\{\})}£
+£\ass{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}£
+\end{lstlisting}
+
+
+\section{{\tt unlink\_small\_chunk}} 
+
+Specification:  
+\begin{lstlisting}   
+£\ass{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}£
+unlink_small_chunk(M,P,S) //mods={}
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{⌊{\tt S}/8⌋}}{U}}£
+£\ £
+\end{lstlisting}  
+  
+% GROUND LENGTHS 
+\setlength\rC{42mm} % S=8i * 0≤i<32 * x=smallbin+2iw
+\setlength\rG{45mm} % smallmap[i] = 1
+\setlength\rH{18mm} % x ↦fd y
+\setlength\rI{18mm} % y ↦bk x
+\setlength\rS{25mm} % U = U1 + U2
+\setlength\rU{7mm}  % ∃B
+\setlength\rV{67mm} % (y=P ∨ ...)
+\setlength\rAA{17mm}% P ↦fd F
+\setlength\rQ{17mm} % F ↦bk P
+\setlength\rR{24mm} % 1/2 P ↦size S
+\setlength\rZ{38mm} % (bnode |i|)* (F,x,U2)
+\setlength\rB{24mm} % space for if-condition
+
+% DERIVED LENGTHS
+\setlength\rO{\rAA+\rQ+\rR+\rZ}                 % ∃F. P ↦fd F * ...
+\setlength\rJ{\rS+\rV+\rO+2mm}              % (bnode |i|)* (y,x,U+{P+2w↦S-1w})
+\setlength\rF{\rH+\rI+\rJ+3mm}              % bin(|i|,x,U+{P+2w↦S-1w}) 
+\setlength\rL{\rC+\rD+\rE+3mm}         % left-extend scope of ∃y
+\setlength\rFF{\rG+3mm}                         % right-extend scope of ∃y
+\setlength\rGG{\rG+3mm}                         % right-extend scope of ∃U1,U2
+\setlength\rW{\rH+\rI+\rS+2mm}          % left-extend scope of ∃B
+\setlength\rT{\rB+\rH+\rI+\rE+\rD+\rC+4mm}          % left-extend scope of ∃U1,U2
+\setlength\rDD{\rB+\rC+\rD+\rE+\rF+\rG+2mm}    % ∃i...
+\setlength\rA{\rDD+4mm}                     % smallbin⌊s/8⌋(U+{P+2w↦S-1w})
+\setlength\rHH{\rS+\rG+1mm}                         % clearsmallmap(M,I)
+\setlength\rII{\rV+\rH+\rQ}                     % second opening of ∃y
+\setlength\rKK{\rH+\rI+\rS+\rO+4mm}             % right-retract scope of ∃y
+\setlength\rMM{1mm}                        % left-retract scope of ∃y
+\setlength\rLL{\rV-2mm}                         % (y=P...) after "B=P->bk"
+\setlength\rY{\rH+\rI+\rLL+1mm}              % B ↦fd P * P ↦bk B * (y=P...)
+\setlength\rP{\rY+2mm}              % closing ∃B
+\setlength\rJJ{\rP-3mm}                        % mchunkptr B = P->bk
+\setlength\rNN{\rII-2mm}                    % (y=F...) * B ↦fd F * F ↦bk B 
+\setlength\rOO{\rNN-\rH-\rQ}                    % (y=F...) without x and y 
+\setlength\rPP{\rZ+\rS+1mm}                     % right-extend scope of second ∃y
+\setlength\rQQ{\rOO+\rZ+\rS+1mm}                % (bnode |I|)*(y,x,U) 
+\setlength\rRR{\rPP+\rII}                       % second closing of ∃y  
+\setlength\rSS{\rH+\rQ+\rZ+\rS}                 % bin(|I|,x,U)         
+\setlength\rTT{\rC+\rD+\rE+\rRR+\rG+\rB+1mm}   % smallbin[⌊S/8⌋](U)  
+\setlength\rUU{\rA-2mm}                         % closing ∃U1,U2    
+\setlength\rXX{\rA}                      % closing ∃x
+\setlength\rYY{\rS+1mm}                       % right-retract scope of ∃B
+\setlength\rZZ{\rLL+\rS+1mm}                   % twisting after ∃B
+\setlength\rAB{\rB+\rV+\rH+\rQ+\rZ+\rS}      % complicated reasoning!
+\setlength\rCB{\rB+\rV+\rH+\rQ+\rZ+\rS+\rG+1mm}  % more complicated reasoning!
+\setlength\rDB{\rI+\rS+\rAA+\rQ+\rR+\rZ+\rG+4mm} % twisting before if-block
+\setlength\rCC{\rB+\rV+\rH+\rQ+\rZ+\rS+\rG+3mm}  % then/else block
+
+\begin{ribbonproof}
+\rib\rA{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}
+\\   
+\closerib\rA  
+\\
+\com\rA{Defn of \emph{smallbin}.}
+\\   
+\openasm[∃x]\rA
+\\
+\asm{\gap \openasm[∃i]\rDD\gap}
+\\ 
+\asm{\gap  \asm{ \openrib\rC \gap[\rB] \openrib\rF \openrib\rG}\gap}
+\\
+\asm{\gap \asm{ \rib\rC{\ml{{\tt S} = 8i  *  0≤i<32 {}\\{} *  x={\tt smallbin}+2i{\sf w}}} \gap[\rB] \rib\rF{\bin{{\smallsize i}}{x}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}} \rib\rG{{\ml{{\tt smallmap}_{[i]}=1}}}}\gap}
+\\ 
+\asm{\gap  \asm{ \rib\rC{} \gap[\rB]  \closerib\rF \rib\rG{}}\gap}
+\\ 
+\asm{\gap  \asm{ \rib\rC{} \gap[\rB]  \com\rF{Defn of \emph{bin}.} \rib\rG{}}\gap}
+\\
+\asm{\gap  \asm{ \rib\rC{} \gap[\rB]  \openasm[∃y]\rF \rib\rG{}}\gap}
+\\
+\asm{\gap  \asm{ \rib\rC{}\gap[\rB]   \asm{\gap\openrib\rH \openrib\rI \openrib\rJ} \rib\rG{}}\gap}
+\\ 
+\asm{\gap   \asm{ \rib\rC{}  \gap[\rB] \asm{\gap \rib\rH{\fd{x}{y}} \rib\rI{\bk{y}{x}} \rib\rJ{\bnode[*]{{\smallsize i}}{y}{x}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}} \rib\rG{}}\gap}
+\\
+\asm{\gap   \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \closerib\rJ } \rib\rG{}}\gap}
+\\
+\asm{\gap   \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \com\rJ{Split \emph{bnode} list into three.}} \rib\rG{}}\gap}
+\\
+\asm{\gap \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \openasm[∃U_1,U_2]\rJ } \rib\rG{}}\gap}
+\\
+\asm{\gap \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \asm{ \openrib\rS \openrib\rV \openrib\rO} } \rib\rG{}}\gap}
+\\
+\asm{\gap \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \asm{ \rib\rS{U=U_1\uplus U_2} \rib\rV{\bnode[*]{{\smallsize i}}{y}{{\tt P}}{U_1}} \rib\rO{\ml{∃F．\fd{{\tt P}}{F} {}\\{}  *  \bk{F}{{\tt P}} {}\\{}  *  \frac12(\size{{\tt P}}{ {\tt S}}) {}\\{}  *  \bnode[*]{{\smallsize i}}{F}{x}{U_2}}}}} \rib\rG{}}\gap}
+\\
+\asm{\extendasm{\rT}{\rGG}{ \rib\rS{} \closerib\rV \rib\rO{}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \com\rV{Unroll RTC one step.} \rib\rO{}\gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \openrib\rV \rib\rO{}\gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \rib\rV{\ml{(y={\tt P}  *  U_1=\{\}) ∨ (∃B．{}\\{}\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B})}} \rib\rO{}\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \rib\rV{} \closerib\rO\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \rib\rV{} \com\rO{\code{mchunkptr F = P->fd;}}\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \closerib\rV \openrib\rAA \openrib\rQ \openrib\rR \openrib\rZ \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \com\rV{Extend scope of $∃B$. Choose $B=x$ in } \rib\rAA{\fd{\tt P}{\tt F}} \rib\rQ{\bk{\tt F}{\tt P}} \rib\rR{\frac12(\size{\tt P}{\tt S})} \rib\rZ{\bnode[*]{{\smallsize i}}{\tt F}{x}{U_2}}\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \com\rV{first disjunct.}  \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{}\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \openasm[∃B]\rV \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{}\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \asm{\openrib\rLL} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \asm{\rib\rLL{\ml{(y={\tt P}  *  U_1=\{\}  *  B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B})}}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{ \extendasm{\rW}{0mm}{\rib\rLL{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rH{} \rib\rI{} \gap \rib\rS{} \gap \rib\rLL{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rH{} \rib\rI{} \gap \closerib\rS \gap \closerib\rLL} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rH{} \rib\rI{} \gap \com\rZZ{Twist.}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{\asm{ \rib\rH{} \rib\rI{} \gap \openrib\rLL \gap \openrib\rS} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{ \asm{ \rib\rH{} \rib\rI{} \gap \rib\rLL{\ml{(y={\tt P}  *  U_1=\{\}  *  B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B})}} \gap \rib\rS{U=U_1\uplus U_2}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{\asm{ \rib\rH{} \rib\rI{} \gap \rib\rLL{} \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rH{} \rib\rI{} \gap \rib\rLL{} \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \closerib\rH \closerib\rI \gap \closerib\rLL \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \com\rY{Distribute $\fd{x}{y}  *  \bk{y}{x}$ into disjunction.} \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \openrib\rY \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{\asm{ \rib\rY{\ml{(\fd{B}{\tt P}  *  \bk{\tt P}{B}  *  y={\tt P}  *  U_1=\{\}  *  B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B}  *  \fd{x}{y}  *  \bk{y}{x})}} \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rY{} \gap \rib\rS{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\retractasm{0mm}{\rYY}{ \rib\rY{}} \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \closerib\rY } \rib\rS{}\gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{\asm{ \com\rY{Distribute $\fd{B}{\tt P}  *  \bk{\tt P}{B}$ out of disjunction. Forget } } \rib\rS{}\gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB] \asm{\asm{ \com\rY{$y={\tt P}$ from first disjunct.} } \rib\rS{}\gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \openrib\rLL \gap \openrib\rH \openrib\rI } \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{}\gap}\rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rLL{\ml{(U_1=\{\}  *  B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})}} \gap \rib\rH{\fd{B}{\tt P}} \rib\rI{\bk{\tt P}{B}} } \rib\rS{}\gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rLL{} \gap \rib\rH{} \rib\rI{} } \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \rib\rLL{} \gap \rib\rH{} \rib\rI{} } \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\asm{ \closerib\rLL \gap \closerib\rH \closerib\rI } \rib\rS{}\gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{}\gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{\closeasm\rP \rib\rS{} \gap\rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\ 
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{ \com\rP{\code{mchunkptr B = P->bk;}} \rib\rS{} \gap\rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{ \gap \openrib\rLL\gap \openrib\rH \openrib\rI \gap\rib\rS{} \gap\rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{ \gap \rib\rLL{\ml{(U_1=\{\}  *  {\tt B}=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})}}\gap \rib\rH{\fd{\tt B}{\tt P}} \rib\rI{\bk{\tt P}{\tt B}}\gap \rib\rS{} \gap\rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{}\gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \asm{ \gap \rib\rLL{}\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}\gap[\rB]   \asm{ \gap \rib\rLL{}\gap \rib\rH{} \rib\rI{} \gap \rib\rS{} \gap\rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]  \retractasm{\rMM}{\rKK}{\closerib\rLL} \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]   \gap \closeasm\rV \rib\rH{} \rib\rI{} \gap\rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap\gap \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}  \gap[\rB]  \gap \openrib\rV \rib\rH{} \rib\rI{} \gap \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap\gap \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]   \gap \rib\rV{\ml{(U_1=\{\}  *  {\tt B}=x) ∨ ∃y．{}\\{}(\bnode[*]{{\smallsize i}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})}} \rib\rH{} \rib\rI{} \gap\rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap\gap \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{}\gap[\rB]    \gap \rib\rV{} \rib\rH{} \rib\rI{}\gap \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap\gap \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \rib\rC{} \gap[\rB]   \gap \rib\rV{} \rib\rH{} \rib\rI{} \gap \rib\rS{} \gap \rib\rAA{} \rib\rQ{} \rib\rR{} \rib\rZ{} \gap\gap \rib\rG{}}}}
+\\
+\asm{\asm{ \asm{ \closerib\rC  \gap \gap[\rB] \closerib\rV \closerib\rH \closerib\rI \gap\closerib\rS \gap \closerib\rAA \closerib\rQ \closerib\rR \closerib\rZ \gap\gap \closerib\rG}}}
+\\
+\asm{\asm{ \closeasm\rDD }}
+\\
+\asm{\asm{ \com\rDD{\code{bindex\_t I = small\_index(S);}}}}
+\\
+\asm{\asm{ \gap  \openrib\rC \gap\gap[\rB] \openrib\rV \openrib\rH \openrib\rI \gap \openrib\rS \gap \openrib\rAA \openrib\rQ \openrib\rR \openrib\rZ \gap\gap \openrib\rG \gap}}
+\\
+\asm{\asm{ \gap  \rib\rC{\ml{{\tt S}=8{\tt I}  *  0≤{\tt I}<32 {}\\{} *  x={\tt smallbin}+2{\tt I}{\sf w}}} \gap\gap[\rB] \rib\rV{\ml{(U_1=\{\}  *  {\tt B}=x) ∨ ∃y． {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})}} \rib\rH{\fd{\tt B}{\tt P}} \rib\rI{\bk{\tt P}{\tt B}} \gap\rib\rS{U=U_1\uplus U_2}\gap\rib\rAA{\fd{\tt P}{\tt F}} \rib\rQ{\bk{\tt F}{\tt P}} \rib\rR{\frac12(\size{\tt P}{\tt S})} \rib\rZ{\bnode[*]{{\smallsize {\tt I}}}{\tt F}{x}{U_2}} \gap \gap \rib\rG{{\ml{{\tt smallmap}_{[{\tt I}]}=1}}}\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \gap\gap[\rB] \rib\rV{} \rib\rH{} \closerib\rI \gap\closerib\rS\gap\closerib\rAA \closerib\rQ \closerib\rR \closerib\rZ \gap\gap \closerib\rG \gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \gap\gap[\rB] \rib\rV{} \rib\rH{} \com\rDB{Twist. Forget values of $\bk{\tt P}{}$ and $\fd{\tt P}{}$.} \gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \gap\gap[\rB] \rib\rV{} \rib\rH{} \openrib\rQ \openrib\rZ\openrib\rS \gap\openrib\rG \gap \openrib\rI \openrib\rAA \openrib\rR\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}  \gap\com\rB{\code{if (F==B) \{}} \rib\rV{} \rib\rH{} \rib\rQ{\bk{{\tt F}}{\tt P}} \rib\rZ{\bnode[*]{{\smallsize {\tt I}}}{\tt F}{x}{U_2}} \rib\rS{U=U_1\uplus U_2} \gap \rib\rG{{\ml{{\tt smallmap}_{[{\tt I}]}=1}}} \gap\rib\rI{\bk{\tt P}{\underscore}} \rib\rAA{\fd{\tt P}{\underscore}} \rib\rR{\frac12(\size{\tt P}{\tt S})} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \openasm\rCC \rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\openrib\rB \rib\rV{} \rib\rH{} \rib\rQ{} \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\rib\rB{{\tt B}={\tt F}} \rib\rV{} \rib\rH{} \rib\rQ{} \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\closerib\rB \closerib\rV \closerib\rH \closerib\rQ \closerib\rZ \closerib\rS \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\com\rAB{Ribbons 1 and 4 contradict second disjunction of ribbon 2. Hence $U_1 = \{\}$ and $U_2 = \{\}$.} \gap\rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \openrib\rH \openrib\rQ \gap[\rZ] \openrib\rS \gap\rib\rG{}}\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \rib\rH{\fd{x}{\underscore}} \rib\rQ{\bk{x}{\underscore}} \gap[\rZ] \rib\rS{U=\{\}} \gap \rib\rG{}}\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \rib\rH{} \rib\rQ{} \gap[\rZ] \closerib\rS \gap \closerib\rG }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \rib\rH{} \rib\rQ{} \gap[\rZ] \com\rHH{\code{clear\_smallmap(M,I)}} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \rib\rH{} \rib\rQ{} \gap[\rZ] \openrib\rS \gap\openrib\rG }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \rib\rH{} \rib\rQ{} \gap[\rZ] \rib\rS{U=\{\}} \gap \rib\rG{{\ml{{\tt smallmap}_{[{\tt I}]}=(U≠\{\})}}} }\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \gap[\rV] \closerib\rH \closerib\rQ \gap[\rZ] \closerib\rS \gap\rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \com\rRR{Defn of \emph{bin}.} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \openrib\rRR \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rRR{\bin{\smallsize {\tt I}}{x}{U}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \closeasm\rCC \rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \com\rCC{\code{\} else \{}} \rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \openasm\rCC \rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\openrib\rB \rib\rV{} \rib\rH{} \rib\rQ{} \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\rib\rB{{\tt B}≠{\tt F}} \rib\rV{} \rib\rH{} \rib\rQ{} \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\closerib\rB \closerib\rV \closerib\rH \closerib\rQ \closerib\rZ \closerib\rS \gap \closerib\rG }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\com\rCB{From ribbons 1, 2 and 5, deduce $U_1$ and $U_2$ can't both be empty. Extend scope of $∃y$ in ribbon 2, choosing $y={\tt F}$ in first disjunct.}}\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \openrib\rV \openrib\rH \openrib\rQ \openrib\rZ \openrib\rS \gap \openrib\rG }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rV{\ml{∃y．(y={\tt F}  *  U_1=\{\}  *  {\tt B}=x) ∨ {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})}} \rib\rH{\fd{\tt B}{\tt P}} \rib\rQ{\bk{\tt F}{\tt P}} \rib\rZ{\bnode[*]{{\smallsize {\tt I}}}{\tt F}{x}{U_2}} \rib\rS{U=U_1\uplus U_2} \gap \rib\rG{{{\tt smallmap}_{[{\tt I}]}=(U≠\{\})}}}\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rV{} \closerib\rH \closerib\rQ  \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rV{} \com\rH{\code{B->fd = F}} \com\rQ{\code{F->bk = B}} \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rV{} \openrib\rH \openrib\rQ \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rV{} \rib\rH{\fd{\tt B}{\tt F}} \rib\rQ{\bk{\tt F}{\tt B}} \rib\rZ{} \rib\rS{} \gap \rib\rG{} }\rib\rI{} \rib\rAA{} \rib\rR{} \gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \closerib\rV \closerib\rH \closerib\rQ \rib\rZ{} \rib\rS{} \gap\rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \com\rII{Distribute $\fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B}$ into disjunction.} \rib\rZ{} \rib\rS{} \gap\rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \openasm[∃y]\rII \rib\rZ{} \rib\rS{} \gap\rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\openrib\rNN} \rib\rZ{} \rib\rS{} \gap \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rNN{\ml{(y={\tt F}  *  U_1=\{\}  *  {\tt B}=x  *  \fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B}) ∨ {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x}  *  \fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B})}}} \rib\rZ{} \rib\rS{} \gap \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \extendasm{0mm}{\rPP}{\rib\rNN{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rNN{} \gap\rib\rZ{} \rib\rS{}} \rib\rG{}} \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\closerib\rNN \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\com\rNN{Distribute $\fd{x}{y}  *  \bk{y}{x}$ out of disjunction.} \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\openrib\rH \openrib\rQ \openrib\rOO \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{\fd{x}{y}} \rib\rQ{\bk{y}{x}} \rib\rOO{\ml{(y={\tt F}  *  U_1=\{\}) ∨ {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} *  \fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B})}} \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \rib\rOO{} \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \rib\rOO{} \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \closerib\rOO \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \com\rOO{Roll RTC.} \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \openrib\rOO \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \rib\rOO{\bnode[*]{{\smallsize {\tt I}}}{y}{\tt F}{U_1}} \gap\rib\rZ{} \rib\rS{}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \closerib\rOO \gap\closerib\rZ \closerib\rS} \rib\rG{}} \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \com\rQQ{Merge two \emph{bnode} lists.}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \openrib\rQQ} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\rib\rH{} \rib\rQ{} \rib\rQQ{\bnode[*]{{\smallsize {\tt I}}}{y}{x}{U}}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \asm{\closerib\rH \closerib\rQ \closerib\rQQ} \rib\rG{}} \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \closeasm\rRR \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \com\rRR{Defn of \emph{bin}.} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \openrib\rRR \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \asm{\gap[\rB] \rib\rRR{\bin{\smallsize {\tt I}}{x}{U}} \rib\rG{} } \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \closeasm\rCC \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}}
+\\
+\asm{\asm{ \gap \rib\rC{}   \gap\com\rB{\code{\}}} \rib\rRR{} \rib\rG{} \gap \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap}} 
+\\
+\asm{\closeasm\rUU}
+\\
+\asm{\gap \gap \closerib\rC \gap\gap[\rB] \closerib\rRR \closerib\rG \gap \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap\gap}
+\\
+\asm{\gap \gap \com\rTT{Defn of \emph{smallbin}.} \gap \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap\gap}
+\\
+\asm{\gap \gap \openrib\rTT \gap \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap\gap}
+\\
+\asm{\gap \gap \rib\rTT{\smallbin{{⌊{\tt S}/8⌋}}{U}} \gap \rib\rI{} \rib\rAA{}\rib\rR{}\gap\gap\gap\gap}
+\\
+\closeasm\rXX
+\\
+\gap\gap \gap \rib\rTT{} \gap \rib\rI{} \rib\rAA{}\rib\rR{}
+
+\end{ribbonproof}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}£
+£\ass{∃i,x．{\tt S} = 8i  *  0≤i<32  *  x = {\tt smallbin}+2i{\sf w}{}\\{}
+*  \bin{{\smallsize i}}{x}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}} {}\\{}
+*  {\tt smallmap}_{[i]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+£\ass{∃i,x,y．{\tt S} = 8i  *  0≤i<32  *  x = {\tt smallbin}+2i{\sf w}{}\\{}
+*  \fd{x}{y}  *  \bk{y}{x}  *  \bnode[*]{{\smallsize i}}{y}{x}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}} {}\\{}
+*  {\tt smallmap}_{[i]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+£\ass{∃i,x,y,F,U_1,U_2．{\tt S} = 8i  *  0≤i<32  *  x = {\tt smallbin}+2i{\sf w}{}\\{}
+*  \fd{x}{y}  *  \bk{y}{x}  *  U=U_1\uplus U_2 {}\\{}
+*  \bnode[*]{{\smallsize i}}{y}{{\tt P}}{U_1}  *  \fd{{\tt P}}{F}  *  \bk{F}{{\tt P}}  *  \frac12(\size{{\tt P}}{ {\tt S}})  *  \bnode[*]{{\smallsize i}}{F}{x}{U_2} {}\\{}
+*  {\tt smallmap}_{[i]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+£\ass{∃i,x,y,F,B,U_1,U_2．{\tt S} = 8i  *  0≤i<32  *  x = {\tt smallbin}+2i{\sf w}{}\\{}
+*  U=U_1\uplus U_2 {}\\{}
+*  ((y={\tt P}  *  B=x  *  U_1 = \{\}) {}\\{}
+∨ (\fd{x}{y}  *  \bk{y}{x}  *  \bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}})) {}\\{}
+*  \fd{B}{{\tt P}}  *  \bk{{\tt P}}{B}  *  \fd{{\tt P}}{F}  *  \frac12(\size{{\tt P}}{ {\tt S}})  *  \bk{F}{{\tt P}}  *  \bnode[*]{{\smallsize i}}{F}{x}{U_2} {}\\{}
+*  {\tt smallmap}_{[i]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+mchunkptr F = P->fd;
+mchunkptr B = P->bk;
+bindex_t I = small_index(S);
+£\ass{∃x,y,U_1,U_2．{\tt S} = 8{\tt I}  *  0≤{\tt I}<32  *  x = {\tt smallbin}+2{\tt I}{\sf w}{}\\{}
+*  U=U_1\uplus U_2 {}\\{}
+*  ((y={\tt P}  *  {\tt B}=x  *  U_1 = \{\}) {}\\{}
+∨ (\fd{x}{y}  *  \bk{y}{x}  *  \bnode[*]{{\smallsize {\tt I}}}{y}{{\tt B}}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}})) {}\\{}
+*  \fd{{\tt B}}{{\tt P}}  *  \bk{{\tt P}}{{\tt B}}  *  \fd{{\tt P}}{{\tt F}}  *  \frac12(\size{{\tt P}}{ {\tt S}})  *  \bk{{\tt F}}{{\tt P}}  *  \bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{x}{U_2} {}\\{}
+*  {\tt smallmap}_{[{\tt I}]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+//assert(P != B);
+//assert(P != F);
+//assert(chunksize(P) == small_index2size(I));
+if (F == B)
+  £\ass{∃x．{\tt S} = 8{\tt I}  *  0≤{\tt I}<32  *  x = {\tt smallbin}+2{\tt I}{\sf w}{}\\{}
+*  U=\{\} *  {\tt F}={\tt B}=x {}\\{}
+*  \fd{{\tt B}}{{\tt P}}  *  \bk{{\tt P}}{{\tt B}}  *  \fd{{\tt P}}{{\tt F}}  *  \bk{{\tt F}}{{\tt P}}  *  \frac12(\size{{\tt P}}{ {\tt S}}) {}\\{}
+*  {\tt smallmap}_{[{\tt I}]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+  clear_smallmap(M, I);
+  £\ass{∃x．{\tt S} = 8{\tt I}  *  0≤{\tt I}<32  *  x = {\tt smallbin}+2{\tt I}{\sf w}{}\\{}
+*  U=\{\}  *  \fd{x}{\underscore}  *  \bk{x}{\underscore}  *  {\tt smallmap}_{[{\tt I}]}=(U≠\{\}) {}\\{}
+*  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \frac12(\size{{\tt P}}{ {\tt S}})}£
+else //if (RTCHECK((F == smallbin_at(M,I) || ok_address(M, F)) &&
+     //            (B == smallbin_at(M,I) || ok_address(M, B)))) {
+  F->bk = B;
+  B->fd = F;
+  £\ass{∃x,U_1,U_2．{\tt S} = 8{\tt I}  *  0≤{\tt I}<32  *  x = {\tt smallbin}+2{\tt I}{\sf w}{}\\{}
+*  U=U_1\uplus U_2  *  U≠\{\} {}\\{}
+*  ({\tt B}=x  *  U_1 = \{\}) {}\\{}
+∨ (∃y．\fd{x}{y}  *  \bk{y}{x}  *  \bnode[*]{{\smallsize {\tt I}}}{y}{{\tt B}}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}}) {}\\{}
+*  \fd{{\tt B}}{{\tt F}}  *  \bk{{\tt P}}{{\tt B}}  *  \fd{{\tt P}}{{\tt F}}  *  \frac12(\size{{\tt P}}{ {\tt S}})  *  \bk{{\tt F}}{{\tt B}}  *  \bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{x}{U_2} {}\\{}
+*  {\tt smallmap}_{[{\tt I}]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+  £\ass{∃x,y,U_1,U_2． {\tt S} = 8{\tt I}  *  0≤{\tt I}<32  *  x = {\tt smallbin}+2{\tt I}{\sf w}{}\\{}
+*  U=U_1\uplus U_2   *  U≠\{\}  *  \fd{x}{y}  *  \bk{y}{x} {}\\{}
+*  \bnode[*]{{\smallsize {\tt I}}}{y}{{\tt F}}{U_1} {}\\{}
+*  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \frac12(\size{{\tt P}}{ {\tt S}}) *  \bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{x}{U_2} {}\\{}
+*  {\tt smallmap}_{[{\tt I}]}=(U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}≠\{\})}£
+}
+// else {
+//   CORRUPTION_ERROR_ACTION(M);
+// }
+£\ass{{\tt S} = 8{\tt I}  *  0≤{\tt I}<32{}\\{}
+*  \bin{{\smallsize {\tt I}}}{{\tt smallbin}+2{\tt I}{\sf w}}{U}  *  {\tt smallmap}_{[{\tt I}]}=(U≠\{\}) {}\\{}
+*  \frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}
+}£
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{⌊{\tt S}/8⌋}}{U} }£
+
+\end{lstlisting}
+
+
+
+\section{{\tt unlink\_first\_small\_chunk}}
+
+Specification:
+\begin{lstlisting}
+£\ass{∃F．{\tt B}={\tt smallbin}+2{\tt I}{\sf w}  *  0≤{\tt I}<32 {}\\{}
+*  \fd{\tt B}{\tt P}  *  \bk{\tt P}{\tt B}  *  \frac12(\size{{\tt P}}{8{\tt I}})  *  \fd{\tt P}{F}  *  \bk{F}{\tt P} {}\\{}
+*  \bnode[*]{{\smallsize {\tt I}}}{F}{\tt B}{U}  *  {\tt smallmap}_{[{\tt I}]}=1}£
+unlink_first_small_chunk(M, B, P, I) //mods={}
+£\ass{\frac12(\size{{\tt P}}{8{\tt I}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{\tt I}}{U}}£
+£\ £
+\end{lstlisting}
+
+\noindent Verification:
+
+%%% GROUND LENGTHS
+\setlength\rC{8mm}   % ∃F
+\setlength\rA{15mm}  % B=F
+\setlength\rB{40mm}  % B=smallbin + 2Iw * 0≤I<32
+\setlength\rD{20mm}  % B ↦fd P
+\setlength\rE{18mm}  % P ↦bk B
+\setlength\rF{25mm}  % \frac12(P ↦size 8I)
+\setlength\rG{17mm}  % P ↦fd F 
+\setlength\rH{18mm}  % F ↦bk P
+\setlength\rI{37mm}  % (bnode |I|)* (F,B,U)
+\setlength\rJ{42mm}  % smallmap[I]=1
+
+%%% DERIVED LENGTHS
+\setlength\rK{\rA}   %                          = rA-cB-1
+  \addtolength\rK{-\rC}\addtolength\rK{-1mm}
+\setlength\rO{2mm}   % ∃F...                    = cB+rG+rH+rI+2
+  \addtolength\rO{\rC}\addtolength\rO{\rG}
+  \addtolength\rO{\rH}\addtolength\rO{\rI} 
+\setlength\rP{2mm}   % then/else block          = rA+rG+rH+rI+rJ+rD
+  \addtolength\rP{\rA}\addtolength\rP{\rG}
+  \addtolength\rP{\rH}\addtolength\rP{\rI}
+  \addtolength\rP{\rJ}\addtolength\rP{\rD}
+\setlength\rL{\rH}   % bin(|I|,B,U)             = rH+rI+rD
+  \addtolength\rL{\rI}\addtolength\rL{\rD}
+\setlength\rM{1mm}   % smallbin[I](U)           = rL+rJ+rB
+  \addtolength\rM{\rL}\addtolength\rM{\rJ}\addtolength\rM{\rB}
+\setlength\rN{\rJ}   % swap ribbons             = rJ+rD
+  \addtolength\rN{\rD}
+
+\begin{ribbonproof}
+\gap[\rK] \asm{\com\rC{$∃F$} \rib\rG{\fd{\tt P}{F}} \rib\rH{\bk{F}{\tt P}} \rib\rI{\bnode[*]{{\smallsize {\tt I}}}{F}{\tt B}{U}}} \rib\rJ{{\tt smallmap}_{[{\tt I}]}=1} \rib\rD{\fd{\tt B}{\tt P}} \gap \rib\rB{{\tt B}={\tt smallbin}+2{\tt I}{\sf w} {}\\{} *  0≤{\tt I}<32} \rib\rE{\bk{\tt P}{\tt B}} \rib\rF{\frac12(\size{{\tt P}}{8{\tt I}})}
+\\
+\gap[\rK] \asm{\gap[\rC] \closerib\rG \closerib\rH \closerib\rI} \rib\rJ{} \rib\rD{} \gap \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\gap[\rK] \closeasm\rO \rib\rJ{} \rib\rD{} \gap \rib\rB{} \closerib\rE \rib\rF{}
+\\
+\gap[\rK] \com\rO{\code{mchunkptr F = P->fd;}} \rib\rJ{} \rib\rD{} \gap \rib\rB{} \openrib\rE \rib\rF{}
+\\
+\gap \gap[\rA] \openrib\rG \openrib\rH \openrib\rI \rib\rJ{}   \rib\rD{}  \gap  \rib\rB{} \rib\rE{\bk{\tt P}{\underscore}} \rib\rF{}
+\\
+\gap \gap[\rA] \rib\rG{\fd{\tt P}{\tt F}} \rib\rH{\bk{\tt F}{\tt P}} \rib\rI{\bnode[*]{{\smallsize {\tt I}}}{\tt F}{\tt B}{U}} \rib\rJ{} \rib\rD{} \gap \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\com{\rP}{\code{if (B==F) \{}} \rib\rB{} \rib\rE{}  \rib\rF{}
+\\
+\openasm\rP  \rib\rB{}  \rib\rE{} \rib\rF{} 
+\\
+\asm{\openrib\rA \rib\rG{} \rib\rH{} \rib\rI{} \rib\rJ{} \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\rib\rA{{\tt B}={\tt F}} \rib\rG{} \rib\rH{} \rib\rI{} \rib\rJ{} \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\rib\rA{} \rib\rG{} \rib\rH{} \rib\rI{} \closerib\rJ \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\rib\rA{} \rib\rG{} \rib\rH{} \rib\rI{} \com\rJ{\code{clear\_smallmap(M,I);}} \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\rib\rA{} \rib\rG{} \rib\rH{} \rib\rI{} \openrib\rJ \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\rib\rA{} \rib\rG{} \rib\rH{} \rib\rI{} \rib\rJ{{\tt smallmap}_{[{\tt I}]}=0} \closerib\rD} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\closerib\rA \closerib\rG \closerib\rH \closerib\rI \closerib\rJ \openrib\rD} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \openrib\rG \openrib\rH \openrib\rI \openrib\rJ \rib\rD{\fd{\tt B}{\underscore}}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{\fd{\tt P}{\underscore}} \rib\rH{\bk{\tt B}{\underscore}} \rib\rI{U=\{\}} \rib\rJ{{\tt smallmap}_{[{\tt I}]}=(U≠\{\})} \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \rib\rH{} \rib\rI{} \rib\rN{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \rib\rH{} \rib\rI{} \rib\rD{\fd{\tt B}{\underscore}} \rib\rJ{{\tt smallmap}_{[{\tt I}]}=(U≠\{\})}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \closerib\rH \closerib\rI \closerib\rD \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \openrib\rL \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \rib\rL{\bin{\smallsize{\tt I}}{\tt B}{U}} \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\closeasm\rP \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\com\rP{\code{\} else \{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\openasm\rP \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\openrib\rA \rib\rG{} \rib\rH{} \rib\rI{} \rib\rJ{} \rib\rD{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\rib\rA{{\tt B}≠{\tt F}} \rib\rG{}  \rib\rH{} \rib\rI{} \rib\rJ{} \closerib\rD} \rib\rB{} \rib\rE{} \rib\rF{} 
+\\
+\asm{\closerib\rA  \closerib\rG \closerib\rH \closerib\rI \closerib\rJ \com\rD{\code{B->fd = F;}}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \openrib\rG \openrib\rH \openrib\rI \openrib\rJ \openrib\rD} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA]  \rib\rG{\fd{\tt P}{\underscore}} \rib\rH{\bk{\tt F}{\tt P}} \rib\rI{\bnode[*]{{\smallsize {\tt I}}}{\tt F}{\tt B}{U}} \rib\rJ{{\tt smallmap}_{[{\tt I}]}=(U≠\{\})} \rib\rD{\fd{\tt B}{\tt F}} } \rib\rB{}  \rib\rE{}  \rib\rF{} 
+\\
+\asm{\gap[\rA] \rib\rG{} \closerib\rH \rib\rI{} \rib\rN{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{}\com\rH{\code{F->bk = B;}} \rib\rI{} \rib\rD{\fd{\tt B}{\tt F}} \rib\rJ{{\tt smallmap}_{[{\tt I}]}=(U≠\{\})}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \openrib\rH \rib\rI{} \rib\rD{} \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \rib\rH{\bk{\tt F}{\tt B}} \rib\rI{} \rib\rD{} \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \closerib\rH \closerib\rI \closerib\rD \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \openrib\rL \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\asm{\gap[\rA] \rib\rG{} \rib\rL{\bin{\smallsize{\tt I}}{\tt B}{U}} \rib\rJ{}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\closeasm\rP \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\com\rP{\code{\}}} \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\gap \gap[\rA] \rib\rG{} \rib\rL{} \rib\rJ{} \gap \rib\rB{} \rib\rE{} \rib\rF{}
+\\
+\gap \gap[\rA] \rib\rG{} \closerib\rL \closerib\rJ \gap  \closerib\rB \rib\rE{} \rib\rF{}
+\\
+\gap \gap[\rA] \rib\rG{} \openrib\rM \rib\rE{} \rib\rF{}
+\\
+\gap \gap[\rA] \rib\rG{} \rib\rM{\smallbin{\tt I}{U}} \rib\rE{} \rib\rF{}
+\end{ribbonproof}
+
+
+
+\chapter{{\tt dlmalloc}}
+
+Specification:
+\begin{lstlisting}
+£\ass{\state A}£
+dlmalloc(bytes)
+£\ass{∃n．n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  \state{A\uplus \{{\tt ret}↦ n{\sf w}\}} {}\\{} 
+*  \iterstar[n]{i=0}．{\tt ret}+i{\sf w}↦\underscore  *  \frac12(\size{{\tt ret}-2{\sf w}}{\underscore})}£
+\end{lstlisting}
+
+\noindent Verification:
+
+
+\setcounter{lstnumber}{0}
+\begin{lstlisting}
+£\ass{\state A}£
+void* dlmalloc(size_t bytes) {
+#if USE_LOCKS
+  ensure_initialization(); /* initialize in sys_alloc if not using locks */
+#endif
+  if (!PREACTION(gm)) {
+    void* mem;
+    size_t nb;
+    if (bytes <= MAX_SMALL_REQUEST) {
+      £\ass{\state{A}  *  {\tt bytes} ≤ 244}£
+\end{lstlisting}
+
+\subsection*{Allocating small chunks}\label{sect:allocating_small_chunks}
+\begin{lstlisting}
+      bindex_t idx;
+      binmap_t smallbits;
+      nb = (bytes < MIN_REQUEST)? MIN_CHUNK_SIZE : pad_request(bytes);    
+      idx = small_index(nb);
+      smallbits = gm->smallmap >> idx;
+      £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt idx}≥(n+1){\sf w} {}\\{}
+*  2≤{\tt idx}<32  *  {\tt smallbits} = \floor{{\tt smallmap} / 2^{\tt idx}} {}\\{}
+*  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+      if ((smallbits & 0x3U) != 0) { /* Remainderless fit to a smallbin. */
+        £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w} {}\\{}
+*  2≤{\tt idx}<32  *  {\tt smallbits} = \floor{{\tt smallmap} / 2^{\tt idx}} {}\\{}
+*  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}} {}\\{}
+*  {\tt smallbits}_{[1,0]} ≠ 00}£
+\end{lstlisting}
+
+\subsubsection*{`Remainderless' fit to a smallbin}\label{sect:remainderless_fit_to_a_smallbin}
+\begin{lstlisting}
+        mchunkptr b, p;
+        idx += ~smallbits & 1;       /* Uses next bin if idx empty */
+        £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32  *  {\tt smallmap}_{[{\tt idx}]} = 1 {}\\{}
+*  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£     
+        b = smallbin_at(gm, idx);
+        £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32  *  {\tt smallmap}_{[{\tt idx}]} = 1 {}\\{}
+*  {\tt b}={\tt smallbins}+8{\tt idx}  *  \bin{\smallsize{\tt idx}}{\tt b}{U_{{\tt idx}}}  *  U_{{\tt idx}} ≠ \{\} {}\\{}
+*  \iterstar{i∈[0..32)-{\tt idx}}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        // rename U_idx to U_idx++[p+2w->8idx-1w]
+        £\ass{∃\{U_i\mid i∈[0,63)\},p,n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{p+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w}\}} {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  {\tt smallmap}_{[{\tt idx}]} = 1  *  {\tt b}={\tt smallbins}+8{\tt idx} {}\\{}
+*  \fd{\tt b}{p}  *  \bk{p}{\tt b}  *  \bnode[*]{\smallsize{\tt idx}}{p}{\tt b}{U_{{\tt idx}} \uplus \{p+2{\sf w}↦8{\tt idx}-1{\sf w}\}} {}\\{}
+*  \iterstar{i∈[0..32)-{\tt idx}}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        p = b->fd;
+        £\ass{∃\{U_i\mid i∈[0,63)\},n,F．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} 
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  {\tt smallmap}_{[{\tt idx}]} = 1  *  {\tt b}={\tt smallbins}+8{\tt idx} {}\\{}
+*  \fd{\tt b}{\tt p}  *  \bk{\tt p}{\tt b}  *  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{F}  *  \bk{F}{\tt p}  *  \bnode[*]{\smallsize{\tt idx}}{F}{\tt b}{U_{{\tt idx}}} {}\\{}
+*  \iterstar{i∈[0..32)-{\tt idx}}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        //assert(chunksize(p) == small_index2size(idx));
+        unlink_first_small_chunk(gm, b, p, idx);
+        £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  \block[*]{\tt start}{\tt p}{B_1}  *  \ublock{\tt p}{{\tt p}+8{\tt idx}}{\{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{}
+*  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  \block[*]{\tt start}{\tt p}{B_1}  *  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2} {}\\{}
+*  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \cinuse{{\tt p}}{0}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  *  \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+        // use Lemma £\color{DarkGreen}{\tt \ref{lem:coallesced}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}}  *  \ablock{q}{\tt p}{q+2{\sf w}↦m{\sf w}})) {}\\{}
+*  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \cinuse{{\tt p}}{0}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  *  \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q})  *  \pinuse{\tt p}{1} {}\\{}
+*  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \cinuse{{\tt p}}{0}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  *  \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\pinuse{\tt start}{1}  *  \block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q}) {}\\{}
+*  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \pinuse{\tt p}{1}  *  \cinuse{{\tt p}}{0}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  *  \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        set_inuse_and_pinuse(gm, p, small_index2size(idx));
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\pinuse{\tt start}{1}  *  \block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q}) {}\\{}
+*  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{1}  *  \pinuse{\tt p}{1}  *  \cinuse{{\tt p}}{1}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  *  \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q}) {}\\{}
+*  \pinuse{\tt p}{1}  *  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{1}  *  \cinuse{{\tt p}}{1}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  *  \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  \block[*]{\tt start}{\tt p}{B_1}  *  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2} {}\\{}
+*  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{1}  *  \cinuse{{\tt p}}{1}  *  \prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}  * \iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  8{\tt idx}≥(n+1){\sf w}  *  2≤{\tt idx}<32 {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  \block[*]{\tt start}{\tt p}{B_1}  *  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2} {}\\{}
+*  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \pinuse{{\tt p}+8{\tt idx}}{1}  *  \cinuse{{\tt p}}{1} {}\\{}
+* \iterstar[n+2]{i=2}．{\tt p} + i{\sf w}↦\underscore  * \iterstar[2{\tt idx}+1]{i=n+2}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  * \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \pinuse{\tt start}{1}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  \block[*]{\tt start}{\tt p}{B_1}  *  \block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2} {}\\{}
+*  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \ablock{\tt p}{{\tt p}+8{\tt idx}}{\{{\tt p}+2{\sf w}↦_{\sf a} n{\sf w}\}}  * \iterstar[n+2]{i=2}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt idx}})  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃\{U_i\mid i∈[0,63)\}．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{{\tt p}+2{\sf w}↦_{\sf a} n{\sf w}\}} {}\\{} 
+* \iterstar[n+2]{i=2}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  {}\\{}
+*  \frac12(\size{\tt p}{\underscore})  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+        £\ass{∃n．n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  \state{A\uplus \{{\tt p}+2{\sf w}↦ n{\sf w}\}} {}\\{} 
+*  \iterstar[n]{i=0}．{\tt p}+2{\sf w}+i{\sf w}↦\underscore  *  \frac12(\size{\tt p}{\underscore})}£
+        mem = chunk2mem(p);
+        //check_malloced_chunk(gm, mem, nb);
+        £\ass{∃n．n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  \state{A\uplus \{{\tt mem}↦ n{\sf w}\}} {}\\{} 
+*  \iterstar[n]{i=0}．{\tt mem}+i{\sf w}↦\underscore  *  \frac12(\size{{\tt mem}-2{\sf w}}{\underscore})}£
+        goto postaction;
+      }
+      else if (nb > gm->dvsize) {
+        £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt idx}≥(n+1){\sf w} {}\\{}
+*  2≤{\tt idx}<32  *  {\tt smallbits} = \floor{{\tt smallmap} / 2^{\tt idx}} {}\\{}
+*  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+        if (smallbits != 0) { /* Use chunk in next nonempty smallbin */
+          £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt idx}≥(n+1){\sf w} {}\\{}
+*  2≤{\tt idx}<32  *  {\tt smallbits} = \floor{{\tt smallmap} / 2^{\tt idx}}  *  {\tt smallmap}≥2^{\tt idx} {}\\{}
+*  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+\end{lstlisting}
+
+\subsubsection*{`Remainderful' fit to a smallbin}\label{sect:remainderful_fit_to_a_smallbin}
+
+\begin{lstlisting}
+          mchunkptr b, p, r;
+          size_t rsize;
+          bindex_t i;
+          binmap_t leftbits = (smallbits << idx) & left_bits(idx2bit(idx));
+          binmap_t leastbit = least_bit(leftbits);
+          compute_bit2idx(leastbit, i);
+          £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *   8{\tt i}≥(n+1){\sf w} {}\\{}
+*  2≤{\tt i}<32  *  {\tt smallmap}_{[{\tt i}]} = 1 {}\\{}
+*  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+          b = smallbin_at(gm, i);
+          £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}  *  \texttt{least\_addr}=5{\sf w} {}\\{}
+*  n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{} *  2≤{\tt i}<32  *  {\tt smallmap}_{[{\tt i}]} = 1 {}\\{}
+*  {\tt b}={\tt smallbins}+8{\tt i}  *  \bin{\smallsize{\tt i}}{\tt b}{U_{{\tt i}}}  *  U_{{\tt i}} ≠ \{\} {}\\{}
+*  \iterstar{i∈[0..32)-{\tt i}}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+          // rename U_idx to U_idx++[p+2w->8i-1w]
+          £\ass{∃\{U_i\mid i∈[0,63)\},p,n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{p+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w}\}} {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{} *  2≤{\tt i}<32  *  {\tt smallmap}_{[{\tt i}]} = 1  *  {\tt b}={\tt smallbins}+8{\tt i} {}\\{}
+*  \fd{\tt b}{p}  *  \bk{p}{\tt b}  *  \bnode[*]{\smallsize{\tt i}}{p}{\tt b}{U_{{\tt i}} \uplus \{p+2{\sf w}↦8{\tt i}-1{\sf w}\}} {}\\{}
+*  \iterstar{i∈[0..32)-{\tt i}}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+          p = b->fd;
+          £\ass{∃\{U_i\mid i∈[0,63)\},n,F．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt i}-1{\sf w}\}} {}\\{} 
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}   *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{}  *  2≤{\tt i}<32  *  {\tt smallmap}_{[{\tt i}]} = 1  *  {\tt b}={\tt smallbins}+8{\tt i} {}\\{}
+*  \fd{\tt b}{\tt p}  *  \bk{\tt p}{\tt b}  *  \frac12(\size{\tt p}{8{\tt i}})  *  \fd{\tt p}{F}  *  \bk{F}{\tt p}  *  \bnode[*]{\smallsize{\tt i}}{F}{\tt b}{U_{{\tt i}}} {}\\{}
+*  \iterstar{i∈[0..32)-{\tt i}}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+          //assert(chunksize(p) == small_index2size(i));
+          unlink_first_small_chunk(gm, b, p, i);
+          £\ass{∃\{U_i\mid i∈[0,63)\},n．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt i}-1{\sf w}\}} {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}  *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{} *  2≤{\tt i}<32  *  \frac12(\size{\tt p}{8{\tt i}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£
+          //... as before ...
+          £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt i}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\pinuse{\tt start}{1}  *  \block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q}) {}\\{}
+*  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt i}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt i}})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \pinuse{\tt p}{1}  *  \cinuse{{\tt p}}{0} {}\\{}
+*  \prevfoot{{\tt p}+8{\tt i}}{8{\tt i}}  *  \iterstar[2{\tt i}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}   *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{} *  2≤{\tt i}<32  *  \frac12(\size{\tt p}{8{\tt i}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}£ 
+          rsize = small_index2size(i) - nb;
+          /* Fit here cannot be remainderless if 4byte sizes */
+          if (SIZE_T_SIZE != 4 && rsize < MIN_CHUNK_SIZE)
+            £\ass{\false}£
+            set_inuse_and_pinuse(gm, p, small_index2size(i));
+          else {
+            £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt i}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\pinuse{\tt start}{1}  *  \block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q}) {}\\{}
+*  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt i}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{8{\tt i}})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \pinuse{\tt p}{1}  *  \cinuse{{\tt p}}{0} {}\\{}
+*  \prevfoot{{\tt p}+8{\tt i}}{8{\tt i}}  *  \iterstar[2{\tt i}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}   *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{} *  2≤{\tt i}<32  *  \frac12(\size{\tt p}{8{\tt i}})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}} {}\\{}
+*  {\tt rsize} = 8{\tt i} - {\tt nb}}£ 
+            set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+            r = chunk_plus_offset(p, nb);
+            £\ass{∃\{U_i\mid i∈[0,63)\},B_1,B_2,n．\coallesced{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}\uplus \{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt i}-1{\sf w}\}} {}\\{} *  \prevfoot{\tt start}{\underscore}  *  \ublock{{\tt top}}{{\tt top}+{\tt topsize}}{\underscore} {}\\{}
+*  (({\tt start}={\tt p}  *  B_1=\{\}){}\\{}
+∨(∃q,m．\pinuse{\tt start}{1}  *  \block[*]{\tt start}{q}{B_1\uplusminus\{q+2{\sf w}↦m\}} {}\\{}
+*  (m+1){\sf w} ≤ {\tt p}-q  *  \frac12(\size{q}{{\tt p}-q}) {}\\{}
+*  \cinuse{q}{1}  *  {\tt p}-q ≥ 4{\sf w}  *  \iterstar[({\tt p}-q)/{\sf w}+1]{i=m+2}．q+i{\sf w}↦\underscore)) {}\\{}
+*  \block[*]{{\tt p}+8{\tt i}}{\tt top}{B_2}  *  B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{}
+*  \frac12(\size{\tt p}{\tt nb})  *  \pinuse{{\tt p}+8{\tt idx}}{0}  *  \pinuse{\tt p}{1}  *  \cinuse{{\tt p}}{1} {}\\{}
+*  \prevfoot{{\tt p}+8{\tt i}}{8{\tt i}}  *  \iterstar[2{\tt i}]{i=4}．{\tt p} + i{\sf w}↦\underscore {}\\{}
+*  \texttt{least\_addr}=5{\sf w}  * n{\sf w} = \ceil[{\sf w}]{{\tt bytes}}   *  {\tt nb} = \max\{16,\ceil[8]{{\tt bytes}+4}\}  *  8{\tt i}≥(n+1){\sf w} {}\\{} *  2≤{\tt i}<32  *  \frac12(\size{\tt p}{\tt nb})  *  \fd{\tt p}{\underscore}   *  \bk{\tt p}{\underscore}  *  \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}} {}\\{}
+*  {\tt rsize} = 8{\tt i} - {\tt nb}  *  {\tt r} = {\tt p}+{\tt nb}}£
+
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{}
+            ∧ {\tt r}={\tt p}+{\tt nb}}£
+            set_size_and_pinuse_of_free_chunk(r, rsize);
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{} 
+            ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r}) = {\tt rsize}}£
+            replace_dv(gm, r, rsize);
+            £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{} 
+            ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r}) = {\tt rsize} {}\\{}
+            ∧ {\tt dv}={\tt r} ∧ {\tt dvsize}={\tt rsize}}£
+          }
+          mem = chunk2mem(p);
+          check_malloced_chunk(gm, mem, nb);
+          £\ass{P_{small} ∧ P_{nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} ∧ {\tt rsize}=size(p)-{\tt nb} {}\\{} 
+          ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r}) = {\tt rsize} ∧ {\tt mem}={\tt p}+2}£
+          goto postaction;
+        }
+\end{lstlisting}
+
+\subsubsection*{Using a treebin instead}\label{sect:using_a_treebin_instead}
+
+\begin{lstlisting}
+        else if (gm->treemap != 0 && (mem = tmalloc_small(gm, nb)) != 0) {
+          £\ass{P_{small} ∧ P_{nb} ∧ {\tt idx} = \floor{{\tt nb}/8} ∧ ∀i∈[{\tt idx},32)．smallbin(i)=∅ {}\\{}
+          ∧ {\tt mem}=p+2 ∧ flags(p)=\setC\setP ∧ size(p) ≥ {\tt nb}}£
+          check_malloced_chunk(gm, mem, nb);
+          goto postaction;
+        }
+      }
+    }
+\end{lstlisting}
+
+\subsection*{Allocating large chunks}\label{sect:allocating_large_chunks}
+
+\begin{lstlisting}
+    else if (bytes >= MAX_REQUEST)
+      £\ass{{\tt bytes} ≥ 2^{32}-63}£
+      nb = MAX_SIZE_T; /* Too big to allocate. Force failure (in sys alloc) */
+      £\ass{{\tt nb} = 2^{32}-1}£
+    else {
+      £\ass{P_{large}} where $P_{large} = 244 < {\tt bytes} < 2^{32}-63$£
+      nb = pad_request(bytes);
+      £\ass{P_{large} ∧ P_{nb}}£
+      if (gm->treemap != 0 && (mem = tmalloc_large(gm, nb)) != 0) {
+        £\ass{P_{large} ∧ P_{nb} ∧ {\tt mem}=p+2 ∧ flags(p)=\setC\setP ∧ size(p) ≥ {\tt nb}}£
+        check_malloced_chunk(gm, mem, nb);
+        goto postaction;
+      }
+    }
+\end{lstlisting}
+
+\subsection*{Using the designated victim}\label{sect:using_the_designated_victim}
+
+\begin{lstlisting}
+    £\ass{P_{nb}}£
+    if (nb <= gm->dvsize) {
+      £\ass{P_{nb} ∧ {\tt nb}≤{\tt dvsize}}£
+      size_t rsize = gm->dvsize - nb;
+      £\ass{P_{nb} ∧ {\tt nb}≤{\tt dvsize} ∧ {\tt rsize}={\tt dvsize}-{\tt nb}}£
+      mchunkptr p = gm->dv;
+      £\ass{P_{nb} ∧ {\tt nb}≤size({\tt p}) ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ flags({\tt p})=\unsetC\setP}£
+      if (rsize >= MIN_CHUNK_SIZE) { /* split dv */
+        £\ass{P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}≥16 ∧ flags({\tt p})=\unsetC\setP}£
+        mchunkptr r = gm->dv = chunk_plus_offset(p, nb);
+        £\ass{P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}≥16 ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt p})=\unsetC\setP}£
+        gm->dvsize = rsize;
+        set_size_and_pinuse_of_free_chunk(r, rsize);
+        £\ass{P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}≥16 ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt p})=\unsetC\setP {}\\{}
+        ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r})={\tt rsize}}£
+        set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+        £\ass{P_{nb} ∧ {\tt rsize}≥16 ∧ {\tt r}={\tt p}+{\tt nb} ∧ flags({\tt p})=\setC\setP ∧ size(p)={\tt nb} {}\\{}
+        ∧ flags({\tt r})=\unsetC\setP ∧ size({\tt r})={\tt rsize}}£
+      }
+      else { /* exhaust dv */
+        £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\unsetC\setP}£
+        size_t dvs = gm->dvsize;
+        gm->dvsize = 0;
+        gm->dv = 0;
+        set_inuse_and_pinuse(gm, p, dvs);
+        £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\setC\setP}£
+      }
+      £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\setC\setP}£
+      mem = chunk2mem(p);
+      check_malloced_chunk(gm, mem, nb);
+      £\ass{P_{nb} ∧ (size({\tt p})={\tt nb} ∨ size({\tt p})={\tt nb}+8) ∧ flags({\tt p})=\setC\setP ∧ {\tt mem}={\tt p}+2}£
+      goto postaction;
+    }
+\end{lstlisting}
+
+\subsection*{Using the top chunk}
+
+\begin{lstlisting}
+    else if (nb < gm->topsize) { /* Split top */
+      £\ass{ P_{nb} ∧ {\tt nb} < size({\tt top}) }£
+      size_t rsize = gm->topsize -= nb;
+      £\ass{ P_{nb} ∧ {\tt rsize}=size({\tt top})-{\tt nb} ∧ {\tt rsize}>0}£
+      mchunkptr p = gm->top;
+      £\ass{ P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}>0}£
+      mchunkptr r = gm->top = chunk_plus_offset(p, nb);
+      £\ass{ P_{nb} ∧ {\tt rsize}=size({\tt p})-{\tt nb} ∧ {\tt rsize}>0 ∧ {\tt r}={\tt p}+{\tt nb}}£
+      r->head = rsize | PINUSE_BIT;
+      £\ass{ P_{nb} ∧ size({\tt r})=size({\tt p})-{\tt nb} ∧ size({\tt r})>0 ∧ flags({\tt r})=\unsetC\setP ∧ {\tt r}={\tt p}+{\tt nb}}£
+      set_size_and_pinuse_of_inuse_chunk(gm, p, nb);
+      £\ass{ P_{nb} ∧ size({\tt p})={\tt nb} ∧ flags({\tt p}) = \setC\setP ∧ size({\tt r})>0 ∧ flags({\tt r})=\unsetC\setP ∧ {\tt r}={\tt p}+{\tt nb}}£
+      mem = chunk2mem(p);
+      £\ass{ P_{nb} ∧ size({\tt p})={\tt nb} ∧ flags({\tt p}) = \setC\setP ∧ {\tt mem}={\tt p}+2}£
+      check_top_chunk(gm, gm->top);
+      check_malloced_chunk(gm, mem, nb);
+      goto postaction;
+    }
+\end{lstlisting}
+
+\subsection*{Obtaining memory from the system}
+
+\begin{lstlisting}
+    mem = sys_alloc(gm, nb);
+  postaction:
+    POSTACTION(gm);
+    return mem;
+  }
+  return 0;
+}
+\end{lstlisting}
+
+% \chapter{{\tt dlfree}}\label{chap:dlfree}
+
+% \setcounter{lstnumber}{1}
+% \begin{lstlisting}
+% void dlfree(void* mem) {
+%   if (mem != 0) {
+%     mchunkptr p  = mem2chunk(mem);
+% #if FOOTERS
+%     mstate fm = get_mstate_for(p);
+%     if (!ok_magic(fm)) {
+%       USAGE_ERROR_ACTION(fm, p);
+%       return;
+%     }
+% #else /* FOOTERS */
+% #define fm gm
+% #endif /* FOOTERS */
+%     if (!PREACTION(fm)) {
+%       check_inuse_chunk(fm, p);
+%       if (RTCHECK(ok_address(fm, p) && ok_inuse(p))) {
+%         size_t psize = chunksize(p);
+%         mchunkptr next = chunk_plus_offset(p, psize);
+%         if (!pinuse(p)) {
+%           size_t prevsize = p->prev_foot;
+%           if (is_mmapped(p)) {
+%             psize += prevsize + MMAP_FOOT_PAD;
+%             if (CALL_MUNMAP((char*)p - prevsize, psize) == 0)
+%               fm->footprint -= psize;
+%             goto postaction;
+%           }
+%           else {
+%             mchunkptr prev = chunk_minus_offset(p, prevsize);
+%             psize += prevsize;
+%             p = prev;
+%             if (RTCHECK(ok_address(fm, prev))) { /* consolidate backward */
+%               if (p != fm->dv) {
+%                 unlink_chunk(fm, p, prevsize);
+%               }
+%               else if ((next->head & INUSE_BITS) == INUSE_BITS) {
+%                 fm->dvsize = psize;
+%                 set_free_with_pinuse(p, psize, next);
+%                 goto postaction;
+%               }
+%             }
+%             else
+%               goto erroraction;
+%           }
+%         }
+
+%         if (RTCHECK(ok_next(p, next) && ok_pinuse(next))) {
+%           if (!cinuse(next)) {  /* consolidate forward */
+%             if (next == fm->top) {
+%               size_t tsize = fm->topsize += psize;
+%               fm->top = p;
+%               p->head = tsize | PINUSE_BIT;
+%               if (p == fm->dv) {
+%                 fm->dv = 0;
+%                 fm->dvsize = 0;
+%               }
+%               if (should_trim(fm, tsize))
+%                 sys_trim(fm, 0);
+%               goto postaction;
+%             }
+%             else if (next == fm->dv) {
+%               size_t dsize = fm->dvsize += psize;
+%               fm->dv = p;
+%               set_size_and_pinuse_of_free_chunk(p, dsize);
+%               goto postaction;
+%             }
+%             else {
+%               size_t nsize = chunksize(next);
+%               psize += nsize;
+%               unlink_chunk(fm, next, nsize);
+%               set_size_and_pinuse_of_free_chunk(p, psize);
+%               if (p == fm->dv) {
+%                 fm->dvsize = psize;
+%                 goto postaction;
+%               }
+%             }
+%           }
+%           else
+%             set_free_with_pinuse(p, psize, next);
+
+%           if (is_small(psize)) {
+%             insert_small_chunk(fm, p, psize);
+%             check_free_chunk(fm, p);
+%           }
+%           else {
+%             tchunkptr tp = (tchunkptr)p;
+%             insert_large_chunk(fm, tp, psize);
+%             check_free_chunk(fm, p);
+%             if (--fm->release_checks == 0)
+%               release_unused_segments(fm);
+%           }
+%           goto postaction;
+%         }
+%       }
+%     erroraction:
+%       USAGE_ERROR_ACTION(fm, p);
+%     postaction:
+%       POSTACTION(fm);
+%     }
+%   }
+% #if !FOOTERS
+% #undef fm
+% #endif /* FOOTERS */
+% }
+% \end{lstlisting}
+
+\end{document}

@@ -1,0 +1,220 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage{a4wide}
+\usepackage{JohnMath}
+
+\renewcommand{\boxed}[2][]{%
+  \renewcommand{\arraystretch}{0.9}%
+  \mbox{\mdseries\begin{tabular}{|@{\hspace{2px}}L@{\hspace{2px}}|}\hline #2 \\ \hline \end{tabular}}_{\ifthenelse{\equal{#1}{a}}{\rm a}{\ifthenelse{\equal{#1}{b}}{\rm b}{#1}}}%
+}
+\renewcommand{\Boxed}[2][]{%
+  \renewcommand{\arraystretch}{1.0}%
+  \mbox{\mdseries\begin{tabular}{|@{\hspace{2px}}L@{\hspace{2px}}|}\hline #2 \\[1.5pt] \hline \end{tabular}}_{\ifthenelse{\equal{#1}{a}}{\rm a}{\ifthenelse{\equal{#1}{b}}{\rm b}{#1}}}%
+}
+
+\title{Reasoning about doubly-indexed lists \\ using separation logic}
+\author{John Wickerson}
+\date{10th March 2010}
+
+\newcommand{\ndil}{\opit{ndil}}
+\newcommand{\dil}{{\opit{dil}}}
+\newcommand{\List}{{\opit{list}}}
+\newcommand{\nlist}{{\opit{nlist}}}
+\newcommand{\freshquant}{\reflectbox{$\mathsf{N}$}}
+\newcommand{\elems}{\opit{elems}}
+
+% CODE LISTINGS
+\usepackage[svgnames]{xcolor}
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Purple},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen},
+  numbers=none,
+  escapechar=€,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+
+\begin{document}
+
+\maketitle
+
+\section{Motivation}
+
+Suppose nodes $n$ comprise a pair of pointers, at $n+0$ and $n+1$ respectively. Suppose we have two root nodes $r_0$ and $r_1$, and that from $r_0$ one can follow ``+0'' pointers (which we colour red) to trace out a null-terminated list through all the nodes, and also that from $r_1$ one can follow ``+1'' pointers (which we colour green) to trace out another null-terminated list through all the nodes. This scenario represents, for instance, one in which we have a collection of values that we wish to sort in two different ways.
+
+How might we describe such `doubly-indexed' lists?
+
+\subsection{Naïve attempt}
+We project out the two lists, and use ordinary conjunction to combine them together:
+\[
+\ndil(r_0,r_1) ≝ \nlist_0(r_0) ∧ \nlist_1(r_1)
+\]
+where $\nlist_0$ and $\nlist_1$ are the strongest predicates satisfying:
+\[
+\ml{
+\nlist_0(x) ⇔ \ml{x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y\ldotp x{+}0 ↦ y * x{+}1 ↦ £\_£ * \nlist_0(y)}
+\\
+\nlist_1(x) ⇔ \ml{x=0 ∧ \emp ∨ {}\\{} x≠0 ∧ ∃y\ldotp x{+}0 ↦ £\_£ * x{+}1 ↦ y * \nlist_1(y)}
+}
+\]
+
+What we are saying is
+\begin{itemize}
+\item that there is a list formed by following the ``+0'' pointers (and the ``+1'' pointers may point anywhere) and also
+\item that there is a list formed by following the ``+1'' pointers (and the ``+0'' pointers may point anywhere).
+\end{itemize}
+Taken in conjunction, these statements imply that we have a list formed by following the ``+0'' pointers and another formed by following the ``+1'' pointers. 
+
+Unfortunately, the projection of the two lists has to happen at the topmost level, so having projected out the two lists, we lose the tight correspondence between the elements. In other words, having located a node in one list, we need to reason about the entire datastructure in order to find the node in the other list too, and this goes against our mantra of `local' reasoning.
+
+\section{Boxed regions}
+
+\newcommand{\redarrow}{{\color{red}{\rightarrow}}}
+\newcommand{\greenarrow}{{\color{green}{\rightarrow}}}
+\newcommand{\dashedredarrows}{{\color{red}{\text{-\! -\!\guillemotright}}}}
+\newcommand{\dashedgreenarrows}{{\color{green}{\text{-\! -\!\guillemotright}}}}
+\newcommand{\redarrows}{{\color{red}{\text{-\!-\!-\!-\!\guillemotright}}}}
+\newcommand{\greenarrows}{{\color{green}{\text{-\!-\!-\!-\!\guillemotright}}}}
+
+Here's another possibility. We identify two disjoint regions of the state and give them names, α and β. Then define
+\[
+\begin{array}{rcl}
+x\redarrow y &⇔& x\halfpto y,£\_£ * \boxed[β]{r_1 \dashedgreenarrows x \greenarrows y} \\ 
+x\greenarrow y &⇔& x\halfpto y,£\_£ * \boxed[β]{r_1 \dashedredarrows x \redarrows y}
+\end{array}
+\]
+where `$\dashedgreenarrows$' is the reflexive transitive closure, multiplicatively, of `$\greenarrow$', and `$\greenarrows$' is the transitive closure, and similar for the red versions.
+
+Then we can describe our doubly-indexed list like so:
+\[
+\dil(r_0,r_1) ≝ \freshquant α β．\boxed[α]{r_0\dashedredarrows 0} * \boxed[β]{r_1\dashedgreenarrows 0}
+\]
+
+The named regions allow a mix of local and global reasoning. We can make an assertion about a small part of one of the regions, but conjoin that with a boxed assertion concerning the entirety of another (or perhaps the same) region. The $\freshquant$ quantifier creates a new region and gives it a name by which it can later be identified -- we'll consider its semantics now.
+
+\subsection{Formal semantics of boxed regions}
+
+The syntax of assertions is as follows:
+\[
+\begin{array}{r@{\ }l}
+P ::= & e\pto[k]e ｜ \emp ｜ e=e ｜ e>e ｜ \true \\ 
+    ｜& \boxed[α]{P} ｜ \freshquant α．P ｜ P ∨ P ｜P ∧ P ｜ P * P ｜ P \magicwand P ｜ ∃ x． P ｜ ∀x．P
+\end{array}
+\]
+where $k∈(0,1]$ and $e$ is a pure expression. The semantics of an assertion is given as a satisfaction relation on states. A state is a pair comprising a `current' heap $σ$ and a finite collection of boxed heaps $Γ$.
+\[
+\begin{array}[t]{@{}lcl}
+σ,Γ ⊧ e_0\pto[k]e_1 &≝& σ = \{e_0 \pto[k] e_1\} \\
+σ,Γ ⊧ \emp &≝& σ=∅ \\
+σ,Γ ⊧ e_0 = e_1 &≝& e_0 = e_1 \\
+σ,Γ ⊧ P_0 * P_1 &≝& ∃ σ_0,σ_1． σ=σ_0⊙ σ_1 ∧ σ_0,Γ⊧ P_0 ∧ σ_1,Γ⊧ P_1 \\
+σ,Γ ⊧ P_0\magicwand P_1 &≝& ∀σ',σ''．σ⊙σ'=σ'' ∧ σ',Γ ⊧ P_0 ⇒ σ'',Γ ⊧ P_1 \\
+σ,Γ ⊧ P_0 ∧ P_1 &≝& σ,Γ⊧ P_0 ∧ σ,Γ⊧ P_1 \\
+σ,Γ ⊧ ∃x．P &≝& ∃x．σ,Γ ⊧ P \\
+σ,Γ ⊧ \boxed[α]{P} &≝& σ=∅ ∧ Γ(α),Γ⊧ P \qquad \text{provided $α∈\dom(Γ)$}\\
+σ,Γ ⊧ \freshquant α．P &≝& ∃σ',σ_α．\ml{σ=σ'⊙σ_α ∧ σ_α⊥\oprm{im}(Γ) {}\\{} ∧ σ',Γ[α↦σ_α]⊧P \qquad \text{provided $α∉\dom(Γ)$}} \\
+\end{array}
+\]
+We overload the disjointness operator, such that $σ_α⊥\oprm{im}(Γ)$ really means $∀σ∈Γ．σ_α⟂σ$. The heap-update operator, $P([e_0]:=e_1)$ holds of some state iff whenever cell $e_0$ is present in the state then upon updating its value to $e_1$, $P$ holds.
+
+\subsection{Some properties of boxes and freshness quantifiers}
+\begin{itemize}
+\item $\Boxed[a]{P * \boxed[b]{Q}} = \left\{\begin{array}{@{}ll} \boxed[a]{P} * \boxed[b]{Q} & \text{if $a≠b$} \\[3pt]
+\Boxed[a]{P * Q} & \text{if $a=b$}\end{array}\right.$
+\item $\boxed[a]{P} * \boxed[a]{Q} = \boxed[a]{P∧Q}$
+\item $\freshquant α．P ⇔ P*\true$ provided $α∉P$
+\item $\freshquant α．\boxed[α]{P} ⇔ P$ provided $α∉P$
+\item $\freshquant α．P * Q ⇔ P * \freshquant α．Q$ provided $α∉P$
+\end{itemize}
+
+\newpage
+\subsection{Example program: £delete£}
+
+\begin{lstlisting}
+delete(r0,r1,w0,w1,x,y0,y1) {
+  €\ass{\freshquant α β．\ml{\boxed[α]{£r0£\dashedredarrows £w0£ \redarrow £x£ \redarrow £y0£ \dashedredarrows 0} * \boxed[β]{£r1£\dashedgreenarrows £w1£ \greenarrow £x£ \greenarrow £y1£ \dashedgreenarrows 0}}}€
+  €\ass{\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£ \halfpto £x£,£\_£ * £x£ \halfpto £y0£,£\_£ * £y0£ \dashedredarrows 0) ∧ (£r0£\dashedredarrows £w1£ \redarrows 0)} * {}\\[3pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£, £x£ * £x£ \halfpto£\_£,£y1£ * £y1£ \dashedgreenarrows 0) ∧ (£r1£\dashedgreenarrows £w0£ \greenarrows 0)}}}€
+  €\ass{∃u_0 u_1．\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£ \halfpto £x£ * £w0£{+}1 \halfpto£\_£ * £x£ \halfpto £y0£,£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * £w1£{+}1\halfpto£\_£ * u_1 \dashedredarrows 0)} * {}\\[10pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £w1£{+}1\halfpto£x£ * £x£ \halfpto£\_£,£y1£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£ \halfpto £\_£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}}€
+  €\ass{£w0£ ↦ £x£ * £w1£{+}1↦£x£ * £x£ ↦ £y0£,£y1£ {}\\{} * (£w0£↦£y0£ * £w1£{+}1↦£y1£)\magicwand \left(\begin{array}{l}∃u_0 u_1．\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0)} * {}\\[10pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}\end{array}\right)}€
+  [w0] := y0;
+  [w1+1] := y1;
+  €\ass{£w0£ ↦ £y0£ * £w1£{+}1↦£y1£ * £x£ ↦ £y0£,£y1£ {}\\{} * (£w0£↦£y0£ * £w1£{+}1↦£y1£)\magicwand \left(\begin{array}{l}∃u_0 u_1．\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0)} * {}\\[10pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}\end{array}\right)}€
+  €\ass{£x£ ↦ £y0£,£y1£ * ∃u_0 u_1．\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0)} * {}\\[10pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}}€
+  dispose(x);
+  dispose(x+1);
+  €\ass{∃u_0 u_1．\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0)} * {}\\[10pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}}€
+}
+\end{lstlisting}
+
+\subsection{Proof that the third assertion above implies the fourth}
+
+Third assertion:
+\[
+\begin{array}{rl}
+  & \ml{σ ⊧ \freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£ \halfpto £x£ * £w0£{+}1 \halfpto£\_£ * £x£ \halfpto £y0£,£\_£ * £y0£ \dashedredarrows 0) {}\\{}
+ ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * £w1£{+}1\halfpto£\_£ * u_1 \dashedredarrows 0)} * {}\\[10pt]{}
+\boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £w1£{+}1\halfpto£x£ * £x£ \halfpto£\_£,£y1£ * £y1£ \dashedgreenarrows 0) {}\\{}
+∧ (£r1£\dashedgreenarrows £w0£ * £w0£ \halfpto £\_£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}}
+\\
+⇔ & \ml{∃σ_α, σ_β, Γ．σ=σ_α+σ_β ∧ Γ = \{α ↦ σ_α, β↦σ_β\} {}\\{}
+ ∧ σ_α,Γ⊧ £r0£\dashedredarrows £w0£ * £w0£ \halfpto £x£ * £w0£{+}1 \halfpto£\_£ * £x£ \halfpto £y0£,£\_£ * £y0£ \dashedredarrows 0 {}\\{}
+ ∧ σ_α,Γ ⊧ £r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * £w1£{+}1\halfpto£\_£ * u_1 \dashedredarrows 0 {}\\{}
+ ∧ σ_β,Γ ⊧ £r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £w1£{+}1\halfpto£x£ * £x£ \halfpto£\_£,£y1£ * £y1£ \dashedgreenarrows 0 {}\\{}
+ ∧ σ_β,Γ ⊧ £r1£\dashedgreenarrows £w0£ * £w0£ \halfpto £\_£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0}
+\\
+⇔ & \ml{∃σ_α, σ_β, Γ, σ_{α1}, σ_{α2}, σ_{α3}, σ_{α4}, σ_{β1}, σ_{β2}, σ_{β3}, σ_{β4}．{}\\{}
+σ=σ_α+σ_β ∧ Γ = \{α ↦ σ_α, β↦σ_β\} {}\\{}
+∧ σ_α = σ_{α1} + σ_{α2} + \{£w0£\halfpto £x£, £w0£{+}1 \halfpto£\_£, £x£\halfpto (£y0£,£\_£)\} = σ_{α3} + σ_{α4} + \{£w1£\halfpto u_1, £w1£{+}1\halfpto£\_£ \} {}\\{}
+∧ σ_β = σ_{β1} + σ_{β2} + \{£w1£\halfpto £\_£, £w1£{+}1 \halfpto £x£, £x£\halfpto (£\_£,£y1£)\} = σ_{β3} + σ_{β4} + \{£w0£\halfpto£\_£, £w0£{+}1\halfpto u_0\} {}\\{}
+ ∧ σ_{α1},Γ⊧ £r0£\dashedredarrows £w0£  ∧ σ_{α2},Γ⊧ £y0£\dashedredarrows 0 
+ ∧ σ_{α3},Γ⊧ £r0£\dashedredarrows £w1£  ∧ σ_{α4},Γ⊧ u_1\dashedredarrows 0 {}\\{}
+ ∧ σ_{β1},Γ⊧ £r1£\dashedgreenarrows £w1£  ∧ σ_{β2},Γ⊧ £y1£\dashedgreenarrows 0 
+ ∧ σ_{β3},Γ⊧ £r1£\dashedgreenarrows £w0£  ∧ σ_{β4},Γ⊧ u_0\dashedgreenarrows 0
+}
+\end{array}
+\]
+
+\noindent Fourth assertion:
+\[
+\begin{array}{rl}
+  & \ml{σ ⊧ £w0£ ↦ £x£ * £w1£{+}1↦£x£ * £x£ ↦ £y0£,£y1£ {}\\{} * (£w0£↦£y0£ * £w1£{+}1↦£y1£)\magicwand \left(\begin{array}{l}∃u_0 u_1．\freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0)} * {}\\[10pt]{} \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}\end{array}\right)}
+\\
+⇔ & \ml{∃σ',σ''．σ = \{£w0£ ↦ £x£, £w1£{+}1↦£x£, £x£ ↦ (£y0£,£y1£)\} + σ' {}\\{}
+∧ σ'' = σ'+ \{£w0£ ↦ £y0£, £w1£{+}1↦£y1£\} {}\\{}
+∧ σ'' ⊧ \freshquant α β．\ml{\boxed[α]{(£r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0) {}\\{} ∧ (£r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0)} * \boxed[β]{(£r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0) {}\\{} ∧ (£r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0)}}}  
+\\
+⇔ & \ml{∃σ',σ'', Γ', σ'_α, σ'_β．σ = \{£w0£ ↦ £x£, £w1£{+}1↦£x£, £x£ ↦ (£y0£,£y1£)\} + σ'' {}\\{}
+∧ σ' = σ''+ \{£w0£ ↦ £y0£, £w1£{+}1↦£y1£\} = σ'_α + σ'_β {}\\{}
+∧ Γ' = \{α↦σ'_α, β↦σ'_β\} {}\\{}
+∧ σ'_α, Γ' ⊧ £r0£\dashedredarrows £w0£ * £w0£{+}1 \halfpto£\_£ * £y0£ \dashedredarrows 0 
+∧ σ'_α, Γ' ⊧ £r0£\dashedredarrows £w1£ * £w1£ \halfpto u_1 * u_1 \dashedredarrows 0 {}\\{}
+∧ σ'_β, Γ' ⊧ £r1£\dashedgreenarrows £w1£ * £w1£ \halfpto£\_£ * £y1£ \dashedgreenarrows 0 
+∧ σ'_β, Γ' ⊧ £r1£\dashedgreenarrows £w0£ * £w0£{+}1\halfpto u_0 * u_0 \dashedgreenarrows 0
+}
+\\
+⇔ & \ml{∃σ',σ'', Γ', σ'_α, σ'_β, σ'_{α1}, σ'_{α2}, σ'_{α3}, σ'_{α4}, σ'_{β1}, σ'_{β2}, σ'_{β3}, σ'_{β4}．{}\\{}
+σ = \{£w0£ ↦ £x£, £w1£{+}1↦£x£, £x£ ↦ (£y0£,£y1£)\} + σ'' {}\\{}
+∧ σ' = σ''+ \{£w0£ ↦ £y0£, £w1£{+}1↦£y1£\} = σ'_α + σ'_β {}\\{}
+∧ Γ' = \{α↦σ'_α, β↦σ'_β\} {}\\{}
+∧ σ'_α = σ'_{α1} + σ'_{α2} + \{£w0£{+}1 \halfpto£\_£\} = σ'_{α3} + σ'_{α4} + \{£w1£ \halfpto u_1\} {}\\{}
+∧ σ'_β = σ'_{β1} + σ'_{β2} + \{£w1£ \halfpto£\_£\} = σ'_{β3} + σ'_{β4} + \{£w0£{+}1\halfpto u_0\} {}\\{}
+∧ σ'_{α1}, Γ' ⊧ £r0£\dashedredarrows £w0£
+∧ σ'_{α2}, Γ' ⊧ £y0£ \dashedredarrows 0 
+∧ σ'_{α3}, Γ' ⊧ £r0£\dashedredarrows £w1£ 
+∧ σ'_{α4}, Γ' ⊧ u_1 \dashedredarrows 0 {}\\{}
+∧ σ'_{β1}, Γ' ⊧ £r1£\dashedgreenarrows £w1£ 
+∧ σ'_{β2}, Γ' ⊧ £y1£ \dashedgreenarrows 0 
+∧ σ'_{β3}, Γ' ⊧ £r1£\dashedgreenarrows £w0£ 
+∧ σ'_{β4}, Γ' ⊧ u_0 \dashedgreenarrows 0
+}
+\end{array}
+\]
+
+
+\end{document}

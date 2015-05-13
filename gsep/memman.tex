@@ -1,0 +1,683 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{a4wide}
+\usepackage{JohnMath}
+\usepackage{mathtools}
+
+\usepackage[svgnames]{xcolor}
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Black},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin={\normalsize\rmfamily\color{Black}}
+}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\renewcommand{\arraystretch}{1.2}
+
+\renewcommand{\true}{\mathsf{tt}}
+\renewcommand{\emp}{\emph{emp}}
+
+%\renewcommand{\boxed}[2][]{{\textbf{[}}#2{\textbf{]}}_{#1}}
+
+\newcommand{\rsem}[1]{{(\![}{#1}{]\!)}}
+\newcommand{\iterstar}[2][]{\text{\LARGE $*$}^{#1}_{#2}}
+
+\newcommand{\defined}{\mathop{\text{def}}}
+
+\newcommand{\SET}[2]{\left\{\begin{array}{@{}l|l@{}} #1 & #2 \end{array}\right\}}
+
+\newenvironment{mapping}{\left\{ \begin{array}{@{}r@{\,↦\,}l@{}}}{\end{array}\right\}}
+
+%\newcommand{\block}[1]{\smash{\overbracket[0.5pt][2pt]{\underscore\,\ldots\,\underscore}^{#1}}}
+
+\newcommand{\ret}{\texttt{ret}}
+
+\newcommand{\malloc}{{\tt malloc}}
+\newcommand{\sbrk}{{\tt sbrk}}
+\newcommand{\free}{{\tt free}}
+\newcommand{\ls}[2][]{#1 \twoheadrightarrow #2}
+\newcommand{\arena}{\mathop{\emph{arena}}}
+\newcommand{\anArena}{\emph{anArena}}
+\newcommand{\token}{\mathop{\emph{token}}}
+\newcommand{\arenatoken}{\mathop{\emph{arenatoken}}}
+\newcommand{\block}{\mathop{\emph{block}}}
+\newcommand{\ublock}{\mathop{\emph{ublock}}}
+\newcommand{\ablock}{\mathop{\emph{ablock}}}
+\newcommand{\sblock}{\mathop{\emph{sblock}}}
+\newcommand{\A}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize a}}}{\rightarrow}}} #2}
+\newcommand{\U}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize u}}}{\rightarrow}}} #2}
+\newcommand{\B}[2][]{#1 {\rightarrow} #2}
+\newcommand{\E}[2]{#2 \mathbin{\raisebox{2pt}{$\curvearrowleft$}} #1}
+\newcommand{\s}{{\tt s}}
+\renewcommand{\t}{{\tt t}}
+\newcommand{\temp}{{\tt temp}}
+\newcommand{\p}{{\tt p}}
+\newcommand{\q}{{\tt q}}
+\renewcommand{\v}{{\tt v}}
+\newcommand{\brk}{\mathop{\emph{brk}}}
+\newcommand{\brka}{\mathop{\emph{brka}}}
+\newcommand{\n}{{}\\{} \hfill }
+\newcommand{\nw}{{\tt nw}}
+\newcommand{\ap}{{\tt ap}}
+\newcommand{\nbytes}{{\tt nbytes}}
+\newcommand{\WORD}{{\tt WORD}}
+\newcommand{\mathceil}[1]{\left\lceil#1\right\rceil}
+\newcommand{\ptoU}{\mathbin{↦_{\sf u}}}
+\newcommand{\ptoA}{\mathbin{↦_{\sf a}}}
+\newcommand{\ptoS}{\mathbin{↦_{\sf s}}}
+\newcommand{\uninit}{\mathop{\emph{uninit}}}
+\newcommand{\arity}{\mathop{\mathrm{arity}}}
+
+\title{Verifying Memory Managers using GSep}
+\author{John Wickerson}
+
+\begin{document}
+
+\maketitle
+
+\subsection*{Preliminary: Spatial closure operators}
+
+Suppose $R$ and $S$ are of type $\emph{loc} → \emph{loc} → \emph{assertion}$. Define:
+\[
+\begin{array}{rcl}
+R;S &\eqdef& λx\,z．∃y．R\,x\,y  *  S\,y\,z \\
+R ∨ S &\eqdef& λx\,y． R\,x\,y ∨ S\,x\,y \\
+\id &\eqdef& λx\, y．x=y ∧ \emp \\
+R^* &\eqdef& μS．S = \id ∨ R;S \\
+R^+ &\eqdef& R;R^*
+\end{array}
+\]
+
+\noindent Then the ordinary \emph{list} predicate can be defined like so:
+\[
+\emph{list}(x) \eqdef (λx\,y．x↦y)^*\,x\,0
+\] 
+
+\noindent Furthermore, we can parameterise the definitions by an element $m$ of a partial commutative monoid (PCM) $(M,·,u)$. Define:
+\[
+\begin{array}{rcl}
+R;S &\eqdef& λx\,z\,m．∃y\,m_1\,m_2．m=m_1·m_2  *  R\,x\,y\,m_1  *  S\,y\,z\,m_2 \\
+R ∨ S &\eqdef& λx\,y\,m． R\,x\,y\,m ∨ S\,x\,y\,m \\
+\id &\eqdef& λx\,y\,m．x=y ∧ m=u ∧ \emp  \\
+R^* &\eqdef& μS．S = \id ∨ R;S \\
+R^+ &\eqdef& R;R^*
+\end{array}
+\]
+
+\noindent Firstly, using the PCM of sets of naturals, $(\pow{\mathbb{N}}, \uplus, ∅)$, we can define Bornat-style lists, which are parameterised by the set $X$ of locations through which they pass, like so:
+\[
+\emph{blist}(x,X) \eqdef (λx\,y\,X．x↦y ∧ X=\{x\})^*\,x\,0\,X
+\]
+
+\noindent Secondly, using the unique 1-element PCM, $(\{u\}, λ\underscore\,\underscore．u, u)$, the extra parameters become redundant, and can be removed in such a way as to restore the original version above.
+
+Thirdly, we can define an arena that comprises a chain of unallocated, allocated, and system blocks -- more on this later.
+
+\begin{lemma} $R^* = (R^*;R^*)$.
+\end{lemma}
+
+\section{A fixed-sized allocator}
+
+\subsubsection*{External spec}
+\[
+\begin{array}{c}
+⊦\seqspec{\emp}{malloc()}{\ret↦\underscore\,\underscore} \\
+⊦\seqspec{{\tt x}↦\underscore\,\underscore}{free(x)}{\emp}
+\end{array}
+\]
+
+\subsection{Implementation using a free list}
+
+\subsubsection*{Internal spec}
+
+The external spec can be derived from the following internal spec using the hypothetical frame rule.
+
+\[
+\begin{array}{c}
+Δ ⊦ \seqspec{\emph{list}\,{\tt f}}{malloc()}{\ret↦\underscore\,\underscore * \emph{list}\,{\tt f}} \\
+Δ ⊦ \seqspec{{\tt x}↦\underscore\,\underscore * \emph{list}\,{\tt f}}{free(x)}{\emph{list}\,{\tt f}}
+\end{array}
+\]
+
+\noindent where $Δ$ defines:
+\[
+\emph{list}\,x   \eqdef   x=0 ∧ \emp  ∨  ∃y．x ↦ y\,\underscore * \emph{list}\,y
+\]
+
+\subsubsection*{Verification}
+
+\begin{lstlisting}
+union list {
+  union list* ptr;
+  long x;
+};
+
+static union list f = NULL; £\ass{\emph{list}\,{\tt f}}£
+
+void* malloc() 
+£\ass{\emph{list}\,{\tt f}}£ 
+{
+  £\ass{{\tt f}=0 ∧ \emp  ∨  ∃y．{\tt f} ↦ y\,\underscore * \emph{list}\,y}£
+  void* x;
+  if (f == NULL) 
+    £\ass{{\tt f}=0 ∧ \emp}£
+    x = cons(2);
+    £\ass{{\tt x}↦\underscore\,\underscore * ({\tt f}=0 ∧ \emp)}£
+    £\ass{{\tt x}↦\underscore\,\underscore * \emph{list}\,{\tt f}}£
+  else {
+    £\ass{∃y．{\tt f} ↦ y\,\underscore * \emph{list}\,y}£
+    x = f; 
+    £\ass{∃y．{\tt x} ↦ y\,\underscore * \emph{list}\,y}£
+    f = x->ptr;
+    £\ass{{\tt x} ↦ {\tt f}\,\underscore * \emph{list}\,{\tt f}}£
+    £\ass{{\tt x} ↦ \underscore\,\underscore * \emph{list}\,{\tt f}}£
+  }
+  £\ass{{\tt x} ↦ \underscore\,\underscore * \emph{list}\,{\tt f}}£
+  return (void *)x;
+  £\ass{\false}£
+}
+£\ass{\ret↦\underscore\,\underscore * \emph{list}\,{\tt f}}£
+
+
+void free(void* ax)
+£\ass{{\tt ax}↦\underscore\,\underscore * \emph{list}\,{\tt f}}£
+{
+  List* x = (List*)ax;
+  £\ass{{\tt x}↦\underscore\,\underscore * \emph{list}\,{\tt f}}£
+  x -> ptr = f;
+  £\ass{{\tt x}↦{\tt f}\,\underscore * \emph{list}\,{\tt f}}£
+  £\ass{∃y．{\tt x}↦y\,\underscore * \emph{list}\,y}£
+  £\ass{\emph{list}\,{\tt x}}£
+  f = x;  
+} 
+£\ass{\emph{list}\,{\tt f}}£
+\end{lstlisting}
+
+
+\section{A variable-sized allocator}
+
+\subsubsection*{External spec}
+\[
+\begin{array}{c}
+⊦ \seqspec{\emp}{malloc(n)}{(\emph{token}\,\ret\,\mathceil{{\tt n}/\WORD}  *  \iterstar[\mathceil{{\tt n}/\WORD}-1]{i=0}．\ret+i↦\underscore) ∨ \ret=0} \\
+⊦ \seqspec{∃n．\emph{token}\,{\tt x}\,n  *  \iterstar[n-1]{i=0}．{\tt x}+i↦\underscore}{free(x)}{\emp}
+\end{array}
+\]
+
+
+\subsection{Na\"ive implementation (no free list)}
+
+\subsubsection*{Internal spec}
+The external spec can be derived from the following internal spec using the rule for weakening predicate environments.
+
+\[
+\begin{array}{c}
+Δ ⊦ \seqspec{\emp}{x := malloc(n)}{\emph{token}\,\ret\,{\tt n}  *  \iterstar[{\tt n}-1]{i=0}．\ret+i↦\underscore} \\
+Δ ⊦ \seqspec{∃n．\emph{token}\,{\tt x}\,n  *  \iterstar[n-1]{i=0}．{\tt x}+i↦\underscore}{free(x)}{\emp}
+\end{array}
+\]
+\noindent where $Δ$ defines:
+\[
+\begin{array}{rcl}
+\emph{token}\,x\,n &\eqdef& (x-1)↦n
+\end{array}
+\]
+
+\subsubsection*{Verification}
+
+\begin{lstlisting}
+void* malloc(int n) 
+£\ass{\emp}£
+{
+  void* x = cons(n+1);
+  £\ass{\iterstar[{\tt n}]{i=0}．({\tt x}+i)↦\underscore}£
+  *x = n;
+  £\ass{{\tt x}↦{\tt n}  *  \iterstar[{\tt n}]{i=1}．({\tt x}+i)↦\underscore}£
+  £\ass{{\tt x}↦{\tt n}  *  \iterstar[{\tt n}-1]{i=0}．({\tt x}+1+i)↦\underscore}£
+  £\ass{\emph{token}\,({\tt x}+1)\,{\tt n}  *  \iterstar[{\tt n}-1]{i=0}．({\tt x}+1+i)↦\underscore}£
+  return x+1;
+  £\ass{\false}£
+}
+£\ass{\emph{token}\,\ret\,{\tt n}  *  \iterstar[{\tt n}-1]{i=0}．(\emph{ret}+i)↦\underscore}£
+
+void free(void* x) 
+£\ass{∃n．\emph{token}\,{\tt x}\,n  *  \iterstar[n-1]{i=0}．({\tt x}+i)↦\underscore}£
+{
+  £\ass{∃n．({\tt x}-1)↦n  *  \iterstar[n-1]{i=0}．({\tt x}+i)↦\underscore}£
+  int n = *(x-1);
+  £\ass{({\tt x}-1)↦{\tt n}  *  \iterstar[{\tt n}-1]{i=0}．({\tt x}+i)↦\underscore}£
+  £\ass{\iterstar[{\tt n}-1]{i=-1}．({\tt x}+i)↦\underscore}£
+  £\ass{\iterstar[{\tt n}-1]{i=-1}．({\tt x}+i)↦\underscore}£
+  while (n>=0) {
+    £\ass{{\tt n}≥0 ∧ \iterstar[{\tt n}-1]{i=-1}．({\tt x}+i)↦\underscore}£
+    n--;
+    £\ass{({\tt x}+{\tt n})↦\underscore  *  \iterstar[{\tt n}-1]{i=-1}．({\tt x}+i)↦\underscore}£
+    dispose(x+n);
+    £\ass{\iterstar[{\tt n}-1]{i=-1}．({\tt x}+i)↦\underscore}£
+  }
+  £\ass{{\tt n}<0 ∧ \iterstar[{\tt n}-1]{i=-1}．({\tt x}+i)↦\underscore}£
+}
+£\ass{\emp}£
+\end{lstlisting}
+
+\subsection{Second implementation (Unix V7)}
+
+Note that the various `pure' operators, such as `$=$' and `$>$' and `$\defined(-)$', are all given an empty footprint. That is, read $x=5$ as $x=5 ∧ \emp$.
+
+The external spec can be derived from the following internal spec using the hypothetical frame rule (which removes the invariant $\anArena$), the rule for weakening predicate environments (which removes $Δ$), and the {\sc Erase} rule (which removes $G$).
+
+\subsubsection*{Internal spec}
+
+\[
+\begin{array}{c}
+δ;γ;G ⊦ \seqspec{\anArena}{malloc(n)}{\anArena  *  {}\\{} ((\token\ret\,\mathceil{{\tt n}/\WORD}  *  \iterstar[\mathceil{{\tt n}/\WORD}-1]{i=0}．\ret+i↦\underscore) ∨ \ret = 0 ) } \\
+δ;γ;G ⊦ \seqspec{\anArena  *  ∃n．\token\,{\tt x}\,n  *  \iterstar[n-1]{i=0}．{\tt x}+i↦\underscore}{free(x)}{\anArena}
+\end{array}
+\]
+\noindent where $δ$ defines:
+\[
+\begin{array}{rcl}
+\ublock x\,y\,B &\eqdef& B = \{x+1 \ptoU y-x-1\}  *  x<y  *  x↦y  *  \iterstar[y-1]{i=x+1}．i↦\underscore \\
+\ablock x\,y\,B &\eqdef& B = \{x+1 \ptoA y-x-1\}  *  x<y  *  x_{\mid 1}\pto[.5]y \\
+\sblock x\,y\,B &\eqdef& B = \{x+1 \ptoS y-x-1\}  *  x<y  *  x_{\mid 1}↦y \\
+\block &\eqdef& {\ublock} ∨ {\ablock} ∨ {\sblock} \\
+\uninit\,A &\eqdef& \s↦0\,0  *  A=∅  *  \brka(\s+2) \\
+\arena\,A &\eqdef& \ml{∃B_1,B_2 : \mathcal{B}．\block^*\,\s\,\v\,B_1  *  \block^*\v\,\t\,B_2 {}\\{} *  A = (B_1 \uplus B_2)^{\sf a}  *  \t_{\mid1} ↦ \s  *  \brka(\t+1)} \\
+\anArena &\eqdef& \boxed{∃A．\uninit\,A  ∨  \arena\,A} \\
+\token x\,n &\eqdef& \boxed{∃A．\arena(A \uplus \{x↦n\})}  *  (x-1)_{\mid 1}\pto[.5] x+n 
+\end{array}
+\]
+\noindent Note that we use the following separation algebra for the spatial closure operators:
+\[
+\mathcal{B} \eqdef (\mathbb{N}\rightharpoonup \{{\sf u},{\sf a},{\sf s}\}×\mathbb{N}_0, \uplus, ∅)
+\]
+
+\noindent Note also that $B^{\sf a}$ returns a function of type $\mathbb{N}\rightharpoonup\mathbb{N}_0$, such that $(x↦n) ∈ B^{\sf a}$ if and only if $(x\ptoA n) ∈ B$. 
+
+The guarantee $G$ is defined as $\bigcup_x\,\left\{\emph{Malloc}, \emph{Free}\,x\right\}$, where:
+\[
+\begin{array}{rcl}
+\emph{Malloc} &\eqdef& ∃A,x,n．(\s↦0\,0  *  A=∅)  ∨  arena\,A  \rightsquigarrow \arena(A\uplus\{x↦n\}) \\
+\emph{Free}\,x &\eqdef& ∃A,n．(x-1)_{\mid 1}\pto[.5](x+n)  \mid  \arena(A\uplus\{x↦n\})  \rightsquigarrow \arena A \\
+\end{array}
+\]
+\noindent The procedure environment $γ$ provides a specification for \sbrk. The `official' spec for \sbrk is as follows:
+\[
+⊦ \seqspec{\brk(b)}{sbrk(n)}{(\brk(b)  *  \ret=-1  *  {\tt n}≠0) ∨ {}\\{} (\brk(b+\mathceil{{\tt n}/\WORD})  *  \ret=b  *  \iterstar[\mathceil{{\tt n}/\WORD}-1]{i=0}．\ret+i↦\underscore)} \\
+\]
+
+\noindent but if we define $\brka(x)$ as shorthand for $∃b≥x．\brk(b)$, then we obtain the following derived spec:
+\[
+⊦ \seqspec{\brka(x)}{sbrk(n)}{(\brka(x)  *  \ret=-1  *  {\tt n}≠0) ∨ {}\\{} (\brka(\ret+\mathceil{{\tt n}/\WORD})  *  x≤\ret  *  \iterstar[\mathceil{{\tt n}/\WORD}-1]{i=0}．\ret+i↦\underscore)} \\
+\]
+
+\noindent which is easier to use, and is hence the one contained in $γ$.
+
+The verification of the module depends on the following two lemmas:
+
+\begin{lemma}
+\emph{$\block^*x_1\,y_1\,B_1  *  \block^*x_2\,y_2\,B_2  ⟹  B_1 \perp B_2$}
+\end{lemma}
+\begin{lemma}
+\emph{$\block^*x\,y\,B  *  w↦z  ⟹  w+1 ∉ \dom(B)$}
+\end{lemma}
+
+\subsubsection*{Verification of malloc routine}
+
+\begin{lstlisting}
+#define WORD sizeof(union store)
+#define BLOCK 1024	/* a multiple of WORD*/
+#define testbusy(p) ((int)(p)&1)
+#define setbusy(p) (struct store *)((int)(p)|1)
+#define clearbusy(p) (struct store *)((int)(p)&~1)
+
+struct store {struct store *ptr;};
+static struct store s[2]; /* initial arena */
+static struct store *v;   /* search ptr */
+static struct store *t;   /* arena top */
+
+char *malloc(unsigned int nbytes) 
+£\ass{\anArena}£
+£\ass{\boxed{∃A．\uninit A  ∨  \arena A}}£
+// begin Existential
+£\ass{\boxed{\uninit A  ∨  \arena A}}£
+// begin region update (action is either Malloc or none)
+£\ass{\uninit A  ∨  \arena A}£
+// Precondition for returning:
+£\ass{\left(\ml[c]{\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\}) {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+*  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\nbytes/\WORD}}\right) ∨ (\arena\,A  *  \ret=0)}£
+{
+  £\ass{\uninit A  ∨  \arena A}£
+  register struct store *p, *q;
+  register nw;
+  static temp;
+  if(s[0].ptr == 0) { /*first time*/
+    £\ass{\uninit A}£
+    £\ass{\s↦0\,0  *  \brka(\s+2)  *  A=∅}£
+    s[0].ptr = setbusy(&s[1]);
+    £\ass{\s_{\mid 1}↦\s+1  *  \s+1↦0  *  \brka(\s+2)  *  A=∅}£
+    s[1].ptr = setbusy(&s[0]);
+    £\ass{\s_{\mid 1}↦\s+1  *  (\s+1)_{\mid 1}↦\s  *  \brka(\s+2)  *  A=∅}£
+    t = &s[1];
+    £\ass{\s_{\mid 1}↦\t  *  \t_{\mid 1}↦\s  *  \s<\t  *  \brka(\t+1)  *  A=∅}£
+    v = &s[0];
+    £\ass{\s_{\mid 1}↦\t  *  \t_{\mid 1}↦\s  *  \s<\t  *  \v=\s  *  \brka(\t+1)  *  A=∅}£
+    £\ass{\sblock\s\,\t\,\{\s+1 \ptoS 0\}  *  \t_{\mid 1}↦\s  *  \v=\s  *  \brka(\t+1)  *  A=∅}£
+    £\ass{∃B_1,B_2．\block^*\s\,\v\,B_1  *  \block^*\v\,\t\,B_2  *  \t_{\mid 1}↦\s {}\\{}
+    *  A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1)  *  A=∅}£
+    £\ass{\arena A  *  A=∅}£
+    £\ass{\arena A}£
+  }
+  £\ass{∃B_1,B_2．\block^*\s\,\v\,B_1  *  \block^*\v\,\t\,B_2  *  \t_{\mid1} ↦ \s {}\\{} 
+  *  A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1)}£
+  nw=(nbytes+WORD+WORD-1)/WORD;
+  £\ass{∃B_1,B_2．\block^*\s\,\v\,B_1  *  \block^*\v\,\t\,B_2  *  \t_{\mid1} ↦ \s {}\\{} 
+  *  A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+  for(p=v; ; ) { 
+    // Loop inv 1:
+    £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1  *  \block^*\p\,\t\,B_2  *  \t_{\mid1} ↦ \s {}\\{}
+    *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1) 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+    for(temp=0; ; ) {
+      // Loop inv 2:
+      £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1  *  \block^*\p\,\t\,B_2  *  \t_{\mid1} ↦ \s {}\\{}
+      *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1)
+       *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+      if(!testbusy(p->ptr)) {
+        £\ass{∃B_1,B_2,q．\block^*\s\,\p\,B_1 *  \ublock \p\,q\,\{\p+1\ptoU q-\p-1\}  *  \block^*q\,\t\,B_2 {}\\{}
+        *  \t_{\mid1} ↦ \s  *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1) 
+         *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£ 
+	while(!testbusy((q=p->ptr)->ptr)) {
+          £\ass{∃B_1,B_2,r．\block^*\s\,\p\,B_1 *  \ublock \p\,\q\,\{\p+1\ptoU \q-\p-1\} {}\\{}
+          *  \ublock \q\,r\,\{\q+1\ptoU r-\q-1\}  *  \block^*r\,\t\,B_2  *  \t_{\mid1} ↦ \s {}\\{}
+          *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£ 
+	  p->ptr = q->ptr; // coalesce consecutive free blocks
+          £\ass{∃B_1,B_2,r．\block^*\s\,\p\,B_1 *  \ublock \p\,r\,\{\p+1\ptoU r-\p-1\}  *  \block^*r\,\t\,B_2 {}\\{}
+          *  \t_{\mid1} ↦ \s  *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1) 
+           *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£ 
+ 	}
+        £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \ublock \p\,\q\,\{\p+1\ptoU \q-\p-1\}  *  \block^*\q\,\t\,B_2 {}\\{}
+        *  \t_{\mid1} ↦ \s  *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1) 
+         *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£ 
+	if(q>=p+nw && p+nw>=p) {
+          £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \ublock \p\,\q\,\{\p+1\ptoU \q-\p-1\} {}\\{}
+          *  \block^*\q\,\t\,B_2  *  \t_{\mid1} ↦ \s  *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1) {}\\{}
+          *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q\geq\p+\nw}£ 
+	  goto found;
+          £\ass{\false}£
+        } 
+      }
+      // p's block is unavailable / too small,
+      // or p points to the top of the arena
+      £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1  *  \block^*\p\,\t\,B_2  *  A=(B_1\uplus B_2)^{\sf a} {}\\{}
+      *  \t_{\mid1} ↦ \s  *  \brka(\t+1)   *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+      q = p;
+      £\ass{∃B_1,B_2．\block^*\s\,\q\,B_1  *  \block^*\q\,\t\,B_2  *  A=(B_1\uplus B_2)^{\sf a} {}\\{}
+      *  \t_{\mid1} ↦ \s  *  \brka(\t+1)   *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q=\p}£
+      £\ass{∃B_1,B_2．\block^*\s\,\q\,B_1  *  \block^*\q\,\t\,B_2  *  A=(B_1\uplus B_2)^{\sf a} {}\\{}
+      *  \t_{\mid1} ↦ \s  *  \brka(\t+1)   *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q=\p}£
+      p = clearbusy(p->ptr);
+      £\ass{((∃B_1,B_2,τ．\block^*\s\,\q\,B_1  *  \block \q\,\p\,\{\q+1↦_τ\p-\q-1\} {}\\{} 
+      *  \block^*\p\,\t\,B_2  *  A=(B_1\uplus \{\q+1↦_τ\p-\q-1\} \uplus B_2)^{\sf a}) \\{}
+      ∨ (∃B．\block^*\s\,\q\,B  *  A=B^{\sf a}  *  \q=\t  *  \p=\s)) {}\\{}
+      *  \t_{\mid1} ↦ \s  *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} }£
+      if(p>q) {
+        £\ass{∃B_1,B_2,τ．\block^*\s\,\q\,B_1  *  \block \q\,\p\,\{\q+1↦_τ\p-\q-1\} {}\\{}
+        *  \block^*\p\,\t\,B_2  *  A = (B_1\uplus \{\q+1↦_τ\p-\q-1\} \uplus B_2)^{\sf a} {}\\{}
+        *  \t_{\mid1} ↦ \s  *  \brka(\t+1) *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+      } else if(q!=t || p!=s) {
+        £\ass{∃B．\block^*\s\,\q\,B  *  \t_{\mid1} ↦ \s  *  A=B^{\sf a}  *  \brka(\t+1) {}\\{}
+        *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q=\t  *  \p=\s  *  (\q≠\t ∨ \p≠\s)}£
+        £\ass{\false}£
+	return 0; // unreachable
+        £\ass{\false}£
+      } else if(++temp>1) {
+        £\ass{∃B．\block^*\s\,\q\,B  *  \t_{\mid1} ↦ \s   *  A=B^{\sf a}  *  \brka(\t+1) {}\\{}
+        *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q=\t  *  \p=\s}£
+	break; // jump to [Extend arena]
+        £\ass{\false}£
+      } 
+      // Reestablish loop inv 2:     
+      £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1  *  \block^*\p\,\t\,B_2  *  A=(B_1\uplus B_2)^{\sf a}  {}\\{} 
+      *  \t_{\mid1} ↦ \s  *  \brka(\t+1)
+       *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+    }
+    // We never exit the loop `normally' (because the non-existent 
+    // test condition never fails). We only reach this point by 
+    // breaking.
+    // [Extend arena]:
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s 
+     *  A=B^{\sf a} {}\\{}
+    *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s}£
+    temp = ((nw+BLOCK/WORD)/(BLOCK/WORD))*(BLOCK/WORD); 
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s 
+     *  A=B^{\sf a}  *  \brka(\t+1) {}\\{}
+    *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s  *  \temp>\nw}£
+    q = (struct store *)sbrk(0);
+    // note that £$\brka(\q) ⟹ \brka(\t+1)$£ because £$\q≥\t+1$£
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s  *  A=B^{\sf a}  *  \brka(\t+1) {}\\{}
+    *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s  *  \temp>\nw  *  \q≥\t+1}£
+    if(q + temp < q) {
+      £\ass{\false}£ // integer overflows aren't modelled
+      return 0; 
+      £\ass{\false}£      
+    }
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s  *  A=B^{\sf a}  *  \brka(\t+1) {}\\{}
+    *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s  *  \temp>\nw  *  \q≥\t+1}£
+    q = (struct store *)sbrk(temp * WORD);
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} {}\\{} *  \p=\s  *  \temp>\nw  *  ((\brka(\t+1)  *  \q=-1) {}\\{}
+    ∨ (\brka(\q+\temp)  *  \t+1≤\q  *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore))}£
+    if((INT)q == -1) {
+      £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s  *  A=B^{\sf a}  *  \brka(\t+1)}£
+      v = s; // line added to fix bug
+      £\ass{∃B_1,B_2．\block^*\s\,\v\,B_1  *  \block^*\v\,\t\,B_2  * \t_{\mid1} ↦ \s {}\\{}
+      *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1)}£
+      £\ass{\arena A}£
+      £\ass{(\arena A  *  \ret=0) [0/\ret]}£
+      return 0;
+      £\ass{\false}£
+    }
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid1} ↦ \s  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s {}\\{}
+    *  \temp>\nw  *  \brka(\q+\temp)  *  \t+1≤\q  *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore}£
+    t->ptr = q;
+    £\ass{∃B．\block^*\s\,\t\,B  *  \t ↦ \q  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s {}\\{}
+    *  \temp>\nw  *  \brka(\q+\temp)  *  \t+1≤\q  *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore}£
+    if(q!=t+1) {
+      £\ass{∃B．\block^*\s\,\t\,B  *  \t ↦ \q  *  A=B^{\sf a} 
+       *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s {}\\{}
+      *  \temp>\nw  *  \brka(\q+\temp)  *  \t+1<\q  *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore}£
+      t->ptr = setbusy(t->ptr);
+      £\ass{∃B．\block^*\s\,\t\,B  *  \t_{\mid 1} ↦ \q  *  A=B^{\sf a}
+       *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s {}\\{}
+      *  \temp>\nw  *  \brka(\q+\temp)  *  \t+1<\q  *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore}£
+      £\ass{∃B．\block^*\s\,\t\,B  *  \sblock \t\,\q\,\{\t+1\ptoS\q-\t-1\}  *  A=B^{\sf a} 
+       *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} {}\\{} *  \p=\s  *  \temp>\nw  *  \brka(\q+\temp) 
+       *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore}£
+    }
+    // t is either a ublock of size 0 or an sblock
+    £\ass{∃B,τ．\block^*\s\,\t\,B  *  \block \t\,\q\,\{\t+1↦_τ\q-\t-1\}  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} {}\\{} *  \p=\s  *  \temp>\nw  *  \brka(\q+\temp) 
+     *  \iterstar[\temp-1]{i=0}．\q+i↦\underscore}£
+    // B swallows the block at t. A=B^a still holds because 
+    // the block at t isn't allocated.
+    £\ass{∃B．\block^*\s\,\q\,B  *  A=B^{\sf a}
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s  *  \temp>\nw {}\\{} *  \brka(\q+\temp) 
+     *  \q↦\underscore  *  \iterstar[\q+\temp-2]{i=\q+1}．i↦\underscore  *  (\q+\temp-1) ↦ \underscore}£
+    t = q->ptr = q+temp-1;
+    £\ass{∃B．\block^*\s\,\q\,B  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s {}\\{}  *  \brka(\t+1) 
+     *  \q<\t  *  \q↦\t  *  \iterstar[\t-1]{i=\q+1}．i↦\underscore  *  \t ↦ \underscore}£
+    £\ass{∃B．\block^*\s\,\q\,B  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \p=\s {}\\{}  *  \brka(\t+1) 
+     *  \ublock\q\,\t\,\{\q+1\ptoU \t-\q-1\}  *  \t ↦ \underscore}£
+    // B swallows the block at q. A=B^a still holds because 
+    // the block at q isn't allocated.
+    £\ass{∃B．\block^*\s\,\t\,B  *  A=B^{\sf a} 
+     *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} {}\\{} *  \p=\s  *  \brka(\t+1) 
+     *  \t ↦ \underscore}£
+    t->ptr = setbusy(s);
+    // reestablish loop inv 1:
+    £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1  *  \block^*\p\,\t\,B_2  *  \t_{\mid 1} ↦ \s {}\\{}
+    *  A=(B_1\uplus B_2)^{\sf a}  *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}}£
+  }
+  £\ass{\false}£
+  found:
+  £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \ublock \p\,\q\,\{\p+1\ptoU \q-\p-1\} {}\\{}
+  *  \block^*\q\,\t\,B_2  *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1) {}\\{}
+  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q\geq\p+\nw}£ 
+  v = p+nw;
+  £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \p<\q  *  \p↦\q  *  \iterstar[\q-1]{i=\p+1}．i↦\underscore {}\\{}
+  *  \block^*\q\,\t\,B_2  *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1) {}\\{}
+  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \q\geq\v  *  \v=\p+\nw}£ 
+  if (q>v) {
+    £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \p<\q  *  \p↦\q  *  \iterstar[\q-1]{i=\p+1}．i↦\underscore {}\\{}
+    *  \block^*\q\,\t\,B_2  *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1) {}\\{}
+    *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} *  \q>\v  *  \v=\p+\nw}£ 
+    v->ptr = p->ptr;
+    £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \p↦\q  *  \iterstar[\v-1]{i=\p+1}．i↦\underscore {}\\{}
+    *  \ublock \v\,\q\,\{(\v+1)\ptoU(\q-\v-1)\} {}\\{} 
+    *  \block^*\q\,\t\,B_2  *  \t_{\mid1} ↦ \s  * A = (B_1 \uplus B_2)^{\sf a}  *  \brka(\t+1) {}\\{}
+    *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \v=\p+\nw}£ 
+    £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \p↦\q  *  \iterstar[\v-1]{i=\p+1}．i↦\underscore 
+     *  \block^*\v\,\t\,B_2 {}\\{} *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a} 
+     *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \v=\p+\nw}£ 
+  }
+  £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \p↦\q  *  \iterstar[\v-1]{i=\p+1}．i↦\underscore 
+   *  \block^*\v\,\t\,B_2 {}\\{} *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a}
+   *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \v=\p+\nw}£
+  p->ptr = setbusy(v);
+  £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1 *  \p_{\mid 1}↦\v  *  \iterstar[\v-1]{i=\p+1}．i↦\underscore 
+   *  \block^*\v\,\t\,B_2 {}\\{} *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a}
+   *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}}  *  \v=\p+\nw}£
+  £\ass{∃B_1,B_2．\block^*\s\,\p\,B_1  *  \ablock\p\,\v\,\{\p+1\ptoA\nw-1\} 
+   *  \block^*\v\,\t\,B_2 {}\\{} *  \t_{\mid1} ↦ \s  *  A = (B_1 \uplus B_2)^{\sf a} 
+   *  \brka(\t+1)  *  \nw=1+\mathceil{\frac{\nbytes}{\WORD}} {}\\{}
+  *  \p_{\mid 1}\pto[.5]\v  *  \iterstar[\v-1]{i=\p+1}．i↦\underscore   *  \v=\p+\nw}£
+  // use lemma to deduce that B1 and p+1 are disjoint
+  £\ass{∃B_1,B_2．\block^*\s\,\v\,B_1  *  \block^*\v\,\t\,B_2  *  \t_{\mid1} ↦ \s {}\\{}
+  *  A \uplus \{\p+1↦ \mathceil{\frac{\nbytes}{\WORD}}\} = (B_1\uplus B_2)^{\sf a} {}\\{}
+  *  \brka(\t+1)  *  \p_{\mid 1}\pto[.5]\p+\mathceil{\frac{\nbytes}{\WORD}}+1 {}\\{} 
+  * \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\p+1+i↦\underscore}£
+  £\ass{(\arena(A\uplus\{\ret↦\mathceil{\frac{\nbytes}{\WORD}}\}) 
+   *  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+   *  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\frac{\nbytes}{\WORD}}) [\p+1/\ret]}£
+  return((char *)(p+1));
+  £\ass{\false}£
+}
+£\ass{\left(\ml[c]{\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\}) {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+*  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\nbytes/\WORD}}\right) ∨ (\arena\,A  *  \ret=0)}£
+// end region update
+£\ass{\left(\ml[c]{\boxed{\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\})} {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+*  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\nbytes/\WORD}}\right) ∨ (\boxed{\arena\,A}  *  \ret=0)}£
+// end existential
+£\ass{\left(\ml[c]{\boxed{∃A．\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\})} {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+*  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\nbytes/\WORD}}\right) ∨ (\boxed{∃A．\arena\,A}  *  \ret=0)}£
+// note that £$∃A．\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\})$£ implies £$∃A．\arena(A)$£
+£\ass{\left(\ml[c]{\boxed{∃A．\arena\,A} {}\\{}
+*  \boxed{∃A．\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\})} {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+*  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\nbytes/\WORD}}\right) ∨ (\boxed{∃A．\arena\,A}  *  \ret=0)}£
+£\ass{\left(\ml[c]{\boxed{∃A．\uninit A  ∨  \arena\,A} {}\\{}
+*  \boxed{∃A．\arena(A\uplus\{\ret↦\mathceil{\nbytes/\WORD}\})} {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore {}\\{}
+*  (\ret-1)_{\mid 1}\pto[.5]\ret+\mathceil{\nbytes/\WORD}}\right) ∨ (\boxed{∃A．\uninit A  ∨  \arena\,A}  *  \ret=0)}£
+£\ass{\left(\ml[c]{\anArena {}\\{}
+*  \token(\ret,\mathceil{\nbytes/\WORD}) {}\\{}
+*  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore}\right) ∨ (\anArena  *  \ret=0)}£
+£\ass{\anArena  *  \ml[t]{ ((\token\ret\,\mathceil{\nbytes/\WORD}  *  \iterstar[\mathceil{\nbytes/\WORD}-1]{i=0}．\ret+i↦\underscore)  ∨  \ret = 0 )}}£
+\end{lstlisting}\ \\
+
+
+
+\subsubsection*{Verification of free routine}
+
+\begin{lstlisting}
+free(register char *ap) 
+£\ass{\anArena  *  ∃n．\token\,{\tt ap}\,n  *  \iterstar[n-1]{i=0}．({\tt ap}+i)↦\underscore}£
+£\ass{∃n．\boxed{∃A．\uninit A  ∨  \arena A}  *  \boxed{∃A．arena(A \uplus \{{\tt ap}↦n\})} 
+ *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n) {}\\{}
+*  \iterstar[n-1]{i=0}．({\tt ap}+i)↦\underscore}£
+£\ass{∃n．\boxed{∃A．arena(A \uplus \{{\tt ap}↦n\})} 
+ *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n)  *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+//begin existential
+£\ass{\boxed{arena(A \uplus \{{\tt ap}↦n\})} 
+ *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n)  *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+//begin "Free x" action
+{
+  £\ass{arena(A \uplus \{{\tt ap}↦n\}) 
+   *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n)  *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+  £\ass{∃B_1,B_2．\block^*\,\s\,\v\,B_1  *  \block^*\,\v\,\t\,B_2  *  A \uplus \{{\tt ap}↦n\} = (B_1 \uplus B_2)^{\sf a} 
+   *  \t_{\mid1} ↦ \s {}\\{} *  \brka(\t+1)  *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n) 
+   *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+  // use lemma to deduce that B1 and B2 are disjoint
+  £\ass{∃B．\block^*\,\s\,\t\,B  *  A \uplus \{{\tt ap}↦n\} = B^{\sf a} 
+   *  \t_{\mid1} ↦ \s {}\\{} *  \brka(\t+1)  *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n) 
+   *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+  // note that £$\{x \ptoA n\} ∈ B$£ implies £$∃B_1,B_2．B = B_1 \uplus \{x \ptoA n\} \uplus B_2$£
+  £\ass{∃B_1,B_2．\block^*\,\s\,(\ap-1)\,B_1  *  \ablock\,(\ap-1)\,(\ap+n)\,\{{\tt ap}\ptoA n\} {}\\{}
+  *  \block^*\,(\ap+n)\,\t\,B_2  *  A \uplus \{{\tt ap}↦n\} = (B_1\uplus \{{\tt ap}\ptoA   n\}\uplus B_2)^{\sf a}
+   *  \t_{\mid1} ↦ \s {}\\{} *  \brka(\t+1)  *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n) 
+   *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+  // by cancellativity of £$\uplus$£:
+  £\ass{∃B_1,B_2．\block^*\,\s\,(\ap-1)\,B_1  *  \ablock\,(\ap-1)\,(\ap+n)\,\{{\tt ap}\ptoA n\} {}\\{}
+  *  \block^*\,(\ap+n)\,\t\,B_2  *  A = (B_1\uplus B_2)^{\sf a}
+   *  \t_{\mid1} ↦ \s {}\\{} *  \brka(\t+1)  *  ({\tt ap}-1)_{\mid 1}\pto[.5]({\tt ap}+n) 
+   *  \iterstar[n-1]{i=0}．{\tt ap}+i↦\underscore}£
+  register struct store *p = (struct store *)ap;
+  v = --p;
+  £\ass{∃B_1,B_2．\block^*\,\s\,\p\,B_1  *  \ablock\,\p\,(\p+1+n)\,\{\p+1\ptoA n\} {}\\{}
+  *  \block^*\,(\p+1+n)\,\t\,B_2  *  A = (B_1\uplus B_2)^{\sf a}
+   *  \t_{\mid1} ↦ \s {}\\{} *  \brka(\t+1)  *  \p_{\mid 1}\pto[.5](\p+1+n) 
+   *  \iterstar[n-1]{i=0}．\p+1+i↦\underscore   *  \p=\v}£
+  £\ass{∃B_1,B_2．\block^*\,\s\,\p\,B_1  *  \p_{\mid 1} ↦ \p+1+n  *  \iterstar[n-1]{i=0}．\p+1+i↦\underscore {}\\{}
+  *  \block^*\,(\p+1+n)\,\t\,B_2  *  A = (B_1\uplus B_2)^{\sf a}
+   *  \t_{\mid1} ↦ \s  *  \brka(\t+1)  *  \p=\v}£
+  p->ptr = clearbusy(p->ptr);
+  £\ass{∃B_1,B_2．\block^*\,\s\,\p\,B_1  *  \p ↦ \p+1+n  *  \iterstar[n-1]{i=0}．\p+1+i↦\underscore {}\\{}
+  *  \block^*\,(\p+1+n)\,\t\,B_2  *  A = (B_1\uplus B_2)^{\sf a}
+   *  \t_{\mid1} ↦ \s  *  \brka(\t+1)  *  \p=\v}£
+  £\ass{∃B_1,B_2．\block^*\,\s\,\p\,B_1  *  \ublock\p\,(\p+1+n)\,\{\p+1\ptoU n\} {}\\{}
+  *  \block^*\,(\p+1+n)\,\t\,B_2  *  A = (B_1\uplus B_2)^{\sf a}
+   *  \t_{\mid1} ↦ \s  *  \brka(\t+1)  *  \p=\v}£
+  // use lemma to deduce that p and B2 are disjoint
+  £\ass{∃B_1,B_2．\block^*\,\s\,\v\,B_1  *  \block^*\,\v\,\t\,B_2  *  A = (B_1 \uplus B_2)^{\sf a}  *  \t_{\mid1} ↦ \s  *  \brka(\t+1)}£
+  £\ass{\arena A}£
+}
+//end "Free x" action
+£\ass{\boxed{\arena A}}£
+//end existential
+£\ass{\boxed{∃A．\arena A}}£
+£\ass{\boxed{∃A．\uninit A  ∨  \arena A}}£
+£\ass{\anArena}£
+\end{lstlisting}\ \\
+
+
+
+
+\end{document}

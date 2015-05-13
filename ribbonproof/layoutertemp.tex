@@ -1,0 +1,59 @@
+setstate [(g,2); (ao,2); (c,2); (a,2); (q,2); (az,2); (e,11); (ay,10); (ac,10); (b,10); (am,2); (z,10); (aa,15); (ab,2); (ae,15); (af,10); (ai,11); (aj,11); (ak,10); (al,11); (ag,10); (ah,11); (ad,2); (u,15); (d,10); (v,10); (at,10); (ax,10); (au,10); (av,10); (x,10); (y,13); (w,13); (f,2); (ba,2); (n,2); (p,22); (m,2); (o,10); (k,10); (as,10); (r,2); (ar,10); (ap,10); (aq,10); (bb,2); (l,2); (an,2); (h,2)] [((ar,ar),("\mrot{{\tt nb}= 2^{32}-8 ∨ ({\tt nb}≥16 ∧ {\tt nb}≥ \ceil[{\sf w}]{{\tt bytes}+{\sf w}} ∧ 8|{\tt nb}) }",true)); ((e,w),("\state A",true)); ((aq,aq),("\mrot{{\tt bytes}≥0}",true))] [(c1,(g,h,([(g,2); (ao,2); (c,2); (a,2); (q,2); (az,2); (e,11); (ay,10); (ac,10); (b,10); (am,2); (z,10); (aa,15); (ab,2); (ae,15); (af,10); (ai,11); (aj,11); (ak,10); (al,11); (ag,10); (ah,11); (ad,2); (u,15); (d,10); (v,10); (at,10); (ax,10); (au,10); (av,10); (x,10); (y,13); (w,13); (f,2); (ba,2); (n,2); (p,22); (m,2); (o,10); (k,10); (as,10); (r,2); (ar,10); (ap,10); (aq,10); (bb,2); (l,2); (an,2); (h,2)] ,[((ar,ar),("\mrot{{\tt nb}= 2^{32}-8 ∨ ({\tt nb}≥16 ∧ {\tt nb}≥ \ceil[{\sf w}]{{\tt bytes}+{\sf w}} ∧ 8|{\tt nb}) }",true)); ((e,w),("\state A",true)); ((aq,aq),("\mrot{{\tt bytes}≥0}",true))] ,[])))] [] false true;
+
+(*\section{*)pendown 1; printcols 0;(*}*)
+
+restate[0];
+ribOS[20](e-w), ribSO(k) "\mrot{{\tt nb}<{\tt topsize}}";
+jus(e-w) "Defn of \emph{state}.";
+bshape st (ao-n) "∃t";
+bshape su (a-ba) "∃U_0,\ldots,U_{63}";
+bshape sv (az-f) "∃v";
+ribSO(ac) "\mrot{\victim{v}}", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{t}", ribSO(e) "\mrot{\iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}", ribSO(u-w) "\topchunk{t}", ribSO(ay) "\mrot{\iterstar[32]{i=0}．\smallbin{i}{U_i}}";
+extend st (ao-an);
+extend su (a-l);
+extend sv (az-bb);
+ribOS(u-w), ribOS(ar), ribOS(k);
+jus(u-ar) "Defn of \emph{topchunk}.";
+twist(u,d,v,at,ax,au,av,x,y)(au,av,d,v,at,y,ax,u,x);
+ribOS(b-ah), ribSO(au) "\mrot{\cinuse{\tt top}{0}}", ribSO[43](d-u) "\iterstar[{\tt topsize}\partialdiv{\sf w}]{i=2}．{\tt top}+i{\sf w}↦\underscore", ribSO(av) "\mrot{\size{\tt top}{\tt topsize}}", ribSS(x-w) "\mrot{t=\{{\tt top}+2{\sf w}↦_{\sf u} \\ {\tt topsize}-1{\sf w}\}}", ribSO(ar) "\mrot{{\tt nb}=\ceil[8]{{\tt bytes}+{\sf w}}}", ribSO(k) "\ditto", ribSO(o) "\mrot{{\tt topsize}\partialdiv 8 ∈ [0\upto2^{29}-8]}";
+eshape st;
+jus(b-ah) "Witness $t$ at $\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\}$.";
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\}}", ribOS(d-u), ribOS(av), ribOS(o), ribOS(k), ribOS(ar);
+com(b-ar) "size\_t rsize = gm->topsize -= nb;";
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}+{\tt nb}-1{\sf w}\}}", ribSO(d-u) "\iterstar[({\tt topsize}+{\tt nb})\partialdiv{\sf w}]{i=2}．{\tt top}+i{\sf w}↦\underscore", ribSO(av) "\mrot{\size{\tt top}{{\tt topsize}+{\tt nb}}}", ribSO(o) "\mrot{{\tt topsize}\partialdiv 8 ∈ (0\upto2^{29}-8]}", ribSO(as) "\mrot{{\tt topsize}={\tt rsize}}", ribSO(ar) "\ditto";
+jus(b-ah) "Defn of \emph{arena}.";
+twist(z,aa)(aa,z);
+ribSS[63](aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v{}\\{} \uplus \{{\tt top}+2{\sf w}↦_{\sf u}{\tt topsize}+{\tt nb}-1{\sf w}\})}", ribSS(ae-ah) "\emph{block}^*({\tt start},{\tt top}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v)", ribSO(b) "\mrot{\prevfoot{\tt start}{\underscore}}", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribOS(d-u), ribOS(av), ribOS(au);
+com(aa-u) "mchunkptr p = gm->top;";
+ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v{}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}{\tt topsize}+{\tt nb}-1{\sf w}\})}", ribSO(ae-ah) "\emph{block}^*({\tt start},{\tt p}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v)", ribSS(d-u) "\iterstar[({\tt topsize}+{\tt nb})\partialdiv{\sf w}]{i=2}．{\tt p}+i{\sf w}↦\underscore", ribSO(au) "\mrot{\cinuse{\tt p}{0}}", ribSO(av)  "\mrot{\size{\tt p}{{\tt topsize}+{\tt nb}}}";
+jus[24](d-u) "Split iteration at $\ceil{{\tt bytes}/{\sf w}}+2$ \\ and $\ceil{{\tt nb}/{\sf w}}+1$. Requires \\ ${\tt bytes}≥0$, ${\tt topsize}≥{\sf w}$, \\ and ${\tt nb}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$.";
+ribSO(u) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}+2]{i=2}．{\tt p}+i{\sf w}↦\underscore}", ribSO(d) "\mrot{\iterstar[\ceil{{\tt nb}/{\sf w}}+1]{i=\ceil{{\tt bytes}/{\sf w}}+2}．{\tt p}+i{\sf w}↦\underscore}", ribSS[17](v-ax) "\iterstar[({\tt topsize}+{\tt nb})\partialdiv{\sf w}]{i=\ceil{{\tt nb}/{\sf w}}+1}．{}\\{} {\tt p}+i{\sf w}↦\underscore";
+jus[12](v-ax) "Split again. Requires \\ ${\tt topsize}≥2{\sf w}$.";
+ribSO(v-y) "\mrot{{\tt p}+{\tt nb}+1{\sf w}↦\underscore}", ribSO[45](ax) "\mrot{\iterstar[{\tt topsize}\partialdiv{\sf w}]{i=2}．{\tt p}+{\tt nb}+i{\sf w}↦\underscore}", twist(u,x,w,f,ba,n,p,m,o,k,as,r,ar)(k,ar,x,w,f,ba,n,p,m,o,as,u,r);
+twist(ax,k)(k,ax), ribOS(v-y), ribOS(ax);
+com[12](v-ax) "mchunkptr r = gm->top =\\chunk\_plus\_offset(p, nb);";
+ribSS(v-y) "{\tt top}+1{\sf w}↦\underscore", ribSO(ax) "\mrot{\iterstar[{\tt topsize}\partialdiv{\sf w}]{i=2}．{\tt top}+i{\sf w}↦\underscore}", ribSS[38](k) "\mrot{{\tt top} = {\tt r} = {\tt p}+{\tt nb}}", ribOS(z), ribOS(aa), ribOS(ae-ah);
+jus(aa-ah) "Extract $\pinuse{\tt p}{1}$.", com[12](au-k) "r->head = rsize | PINUSE\_BIT; \\ \mbox{\rm//Requires $8|{\tt rsize}$.}";
+twist(z,ab,ae,af,ai,aj,ak,al,ag,ah)(ae,af,ai,aj,ak,al,ag,ah,ab,z);
+ribSO(k) "\mrot{{\tt top}={\tt p}+{\tt nb}}", ribSO(aa) "\ditto", ribSO(ae-ah) "\pinuse{\tt p}{1} \magicwand (\pinuse{\tt start}{1}  *  {}\\{} \emph{block}^*({\tt start},{\tt p}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v))", ribSO[25](z) "\mrot{\pinuse{\tt p}{1}}", ribSO(y) "\mrot{\size{\tt top}{\tt rsize}}", ribSO(at) "\mrot{\cinuse{\tt top}{0}}", ribSO(v) "\mrot{\pinuse{\tt top}{1}}";
+ribOS(aa) "\ditto", ribOS[25](z), ribOS(y), ribOS(at), ribOS(au), ribOS(av), ribOS(o), ribOS(ax), twist(at,y,k,ax,ar)(k,ar,at,y,ax), ribOS(as);
+jus(aa) "magic.", com[18](z-v) "set\_size\_and\_pinuse\_of\_\\inuse\_chunk(gm, p, nb);\\ \mbox{\rm //Requires $8|{\tt nb}$.}", jus(at-as) "Defn of \emph{topchunk}.";
+ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v{}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\} \uplus  \{{\tt top}+2{\sf w}↦_{\sf u}{\tt topsize}-1{\sf w}\})}", ribSS[25](z) "\mrot{\pinuse{\tt p}{1}}", ribSS(au) "\mrot{\cinuse{\tt p}{1}}", ribSS(av) "\mrot{\size{\tt p}{\tt nb}}", ribOS(ae-ah), ribSO(at-as) "\emph{topchunk}(\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\})", ribOS(d), ribOS(v), ribOS(k), ribOS(ar);
+jus(ae-z) "Re-insert $\pinuse{\tt p}{1}$.", jus(au-ar) "Defn of \emph{ablock}.";
+twist(ae,af,ai,aj,ak,al,ag,ah,ab,z)(z,ab,ae,af,ai,aj,ak,al,ag,ah);
+ribSS[13](au-ar) "\emph{ablock}({\tt p},{\tt top},\\\{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\})", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSS(ae-ah) "\emph{block}^*({\tt start},{\tt p}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v)";
+jus(ae-ar) "Extend \emph{block} sequence. (TODO: Does this require any additional facts?)";
+ribSS(ae-ar) "\emph{block}^*({\tt start},{\tt top}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\})", ribOS(z), ribOS[50](aa), ribOS(b);
+twist(aa,z)(z,aa);
+jus(b-ar) "Defn of \emph{arena}.";
+ribSS(b-ar) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\}}{\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}+{\tt nb}-1{\sf w}\}}", ribOS(e), ribOS(ay), ribOS(ac), ribOS(at-as);
+eshape sv;
+eshape su;
+jus(e-as) "Defn of \emph{state}.";
+ribSO(e-as) "\state{A\uplus\{{\tt p}+2{\sf w}↦\ceil[{\sf w}]{\tt bytes}\}}";
+
+
+
+
+dumpstate;
+

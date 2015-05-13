@@ -1,0 +1,1270 @@
+\documentclass[svgnames,10pt,twoside]{report}
+\usepackage[paperwidth=45cm, paperheight=85cm, margin=3cm]{geometry}
+
+\usepackage{JohnMath}
+\usepackage{mapsto}
+\usepackage{ribbonproof}
+\usepackage{calc}
+\usepackage{filecontents}
+\usepackage{newfile}
+\usepackage{tikz}
+
+\usepackage{rotating}
+\newcommand{\mrot}[1]{\raisebox{1.7ex}{\turnbox{270}{\ensuremath{\begin{array}{@{}l@{}}#1\end{array}}}}}
+
+%\usepackage[svgnames]{xcolor}
+% \usepackage{MnSymbol}
+
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Purple},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+\newcommand{\code}[1]{\texttt{#1}}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\newcommand{\checkthis}{$^{\rm [check\ this]}$}
+\renewcommand{\floor}[2][]{\left\lfloor{#2}\right\rfloor_{#1}}
+\renewcommand{\ceil}[2][]{\left\lceil{#2}\right\rceil_{#1}}
+\newcommand{\floorpow}[1]{\llfloor{#1}\rrfloor}
+\newcommand{\fracpow}[1]{\{\hspace{-3pt}\{{#1}\}\hspace{-3pt}\}}
+
+\newcommand{\partialdiv}{{/\mathllap{\color{white}{\bullet}}}}
+
+% STATUS FLAGS
+\newcommand{\setC}{\raisebox{1.5pt}{$\blacktriangledown$}}
+\newcommand{\unsetC}{\raisebox{1.5pt}{$\triangledown$}}
+\newcommand{\setP}{{\blacktriangle}}
+\newcommand{\unsetP}{{\triangle}}
+
+% BIT OPERATIONS
+\newcommand{\AND}{\mathbin{\texttt{\&}}}
+\newcommand{\OR}{\mathbin{\texttt{|}}}
+\newcommand{\NOT}{\mathbin{\textasciitilde}}
+\newcommand{\SHIFTRIGHT}{\mathbin{\texttt{>}\hspace{-1pt}\texttt{>}}}
+\newcommand{\SHIFTLEFT}{\mathbin{\texttt{<}\hspace{-1pt}\texttt{<}}}
+
+
+
+\newcommand{\rsem}[1]{{(\![}{#1}{]\!)}}
+\newcommand{\iterstar}[2][]{\text{\LARGE $*$}^{#1}_{#2}}
+
+\newcommand{\defined}{\mathop{\text{def}}}
+
+\newcommand{\SET}[2]{\left\{\begin{array}{@{}l|l@{}} #1 & #2 \end{array}\right\}}
+
+\newenvironment{mapping}{\left\{ \begin{array}{@{}r@{\,↦\,}l@{}}}{\end{array}\right\}}
+
+%\newcommand{\block}[1]{\smash{\overbracket[0.5pt][2pt]{\underscore\,\ldots\,\underscore}^{#1}}}
+
+\newcommand{\ret}{\texttt{ret}}
+
+\newcommand{\malloc}{{\tt malloc}}
+\newcommand{\sbrk}{{\tt sbrk}}
+\newcommand{\free}{{\tt free}}
+\newcommand{\ls}[2][]{#1 \twoheadrightarrow #2}
+\newcommand{\A}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize a}}}{\rightarrow}}} #2}
+\newcommand{\U}[2][]{#1 \mathbin{\smash{\underset{\raisebox{3.5pt}{\smash{\sf\scriptsize u}}}{\rightarrow}}} #2}
+\newcommand{\B}[2][]{#1 {\rightarrow} #2}
+\newcommand{\E}[2]{#2 \mathbin{\raisebox{2pt}{$\curvearrowleft$}} #1}
+\newcommand{\s}{{\tt s}}
+\renewcommand{\t}{{\tt t}}
+\newcommand{\temp}{{\tt temp}}
+\newcommand{\p}{{\tt p}}
+\newcommand{\q}{{\tt q}}
+\renewcommand{\v}{{\tt v}}
+\newcommand{\brk}{\mathop{\emph{brk}}}
+\newcommand{\brka}{\mathop{\emph{brka}}}
+\newcommand{\n}{{}\\{} \hfill }
+\newcommand{\nw}{{\tt nw}}
+\newcommand{\ap}{{\tt ap}}
+\newcommand{\nbytes}{{\tt nbytes}}
+\newcommand{\WORD}{{\tt WORD}}
+\newcommand{\mathceil}[1]{\left\lceil#1\right\rceil}
+\newcommand{\ptoU}{\mathbin{↦_{\sf u}}}
+\newcommand{\ptoA}{\mathbin{↦_{\sf a}}}
+\newcommand{\ptoS}{\mathbin{↦_{\sf s}}}
+
+\newcommand{\ditto}{\ensuremath{\prime\prime}}
+
+\newcommand{\makeribbonproof}[2][]{%
+\immediate\write18{cat #1 layoutertemp.tex > layoutertemptemp.tex}%
+\immediate\write18{mv layoutertemptemp.tex layoutertemp.tex}%
+\immediate\write18{../../ribbons/layouter/layouterexec #2 1 <layoutertemp.tex >layouteroutput.tex}%
+\noindent\input{layouteroutput.tex}\\%
+}
+
+
+\newwrite \johnout
+
+\newenvironment{john}{
+   \immediate\openout\johnout john.ml
+   \immediate\write\johnout{open Ribbonbuilder;;}
+   \immediate\write\johnout{let x = }
+}{
+   \immediate\write\johnout{[NEWPAGE]}
+   \immediate\write\johnout{in latexgen_ribbonproof x}
+   \immediate\closeout \johnout
+   \immediate\write18{ocamlc ribbonbuilder.cmo john.ml}
+   \immediate\write18{./a.out >layouteroutput.tex}
+   \noindent\input{layouteroutput.tex}
+}
+
+\newcommand{\foo}[2]{
+  %\immediate\write\johnout{"#1" ^ "," ^ "#2" ^ "; " ^ }%
+}
+
+
+\title{A proof of Doug Lea's memory manager}
+\author{John Wickerson}
+\date{\today}
+
+\begin{document}
+%\begin{john}
+%\foo{4}{3}
+%\foo{b}{g}
+%\end{john}
+%\end{document}
+
+
+\maketitle
+\pagestyle{headings}
+
+\chapter{Glossary of macros, typedefs and minor routines}\label{chap:glossary}
+
+\renewcommand{\arraystretch}{1.2}
+
+\begin{tt}
+\begin{longtable}{l@{ $=$ }L}
+MALLOC\_ALIGNMENT & 8 \\
+MAX\_SIZE\_T & FFFF\ FFFF_h \\
+SIZE\_T\_SIZE & 4 \\
+SIZE\_T\_BITSIZE & 32 \\
+SIZE\_T\_ZERO & 0 \\
+SIZE\_T\_ONE & 1 \\
+SIZE\_T\_TWO & 2 \\
+SIZE\_T\_FOUR & 4 \\
+TWO\_SIZE\_T\_SIZES & 8 \\
+FOUR\_SIZE\_T\_SIZES & 16 \\
+SIX\_SIZE\_T\_SIZES & 24 \\
+HALF\_MAX\_SIZE\_T & 7FFF\ FFFF_h \\
+CHUNK\_ALIGN\_MASK & 111_b \\
+mchunk & \text{struct malloc\_chunk} \\
+mchunkptr & \text{mchunk*} \\
+sbinptr & \text{mchunk*} \\
+bindex\_t & \text{unsigned int} \\
+binmap\_t & \text{unsigned int} \\
+flag\_t & \text{unsigned int} \\
+MCHUNK\_SIZE & 16 \\
+CHUNK\_OVERHEAD & 4 \\
+MIN\_CHUNK\_SIZE & 16 \\
+chunk2mem(p) & {\tt p} + 8 \\
+mem2chunk(mem) & {\tt mem} - 8 \\
+MAX\_REQUEST & 2^{32}-2^6 \\
+MIN\_REQUEST & 11 \\
+pad\_request(req) & \ceil[8]{{\tt req}+4} \\
+request2size(req) & \max\{16, \ceil[8]{{\tt req}+4}\} \\
+PINUSE\_BIT & 1_b \\
+CINUSE\_BIT & 10_b \\
+FLAG4\_BIT & 100_b \\
+INUSE\_BITS & 11_b \\
+FLAG\_BITS & 111_b \\
+cinuse(p) & [{\tt p}_{[1]}] == 1 \\
+pinuse(p) & [{\tt p}_{[0]}] == 1 \\
+is\_inuse(p) & \texttt{is\_mmapped(p)} ∨ \texttt{cinuse(p)} \\
+is\_mmapped(p) & [{\tt p}_{[1,0]}] == 00 \\
+chunksize(p) & [({\tt p}+1)_{[31..3]}000] \\
+\Seqspec{{\tt p}_{[0]} ↦ \underscore}{clear\_pinuse(p)}{{\tt p}_{[0]} ↦ 0} \\
+chunk\_plus\_offset(p,s) & p + s \\
+chunk\_minus\_offset(p,s) & p - s \\
+next\_chunk(p) & next({\tt p}) \\
+prev\_chunk(p) & prev({\tt p}) \\
+next\_pinuse(p) & flags(next({\tt p})) = \_\setP \\
+get\_foot(p,s) & prev\_foot({\tt p} + {\tt s}) \\
+\Seqspec{prev\_foot({\tt p} + {\tt s}) = \_ }{set\_foot(p,s)}{prev\_foot({\tt p} + {\tt s}) = {\tt s}} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p})=\_\_ {}\\{} ∧ prev\_foot({\tt p}+{\tt s})=\_}{set\_size\_and\_pinuse\_of\_free\_chunk(p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p})=\unsetC\setP {}\\{} ∧ prev\_foot(next({\tt p}))={\tt s}} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p})=\_\_ {}\\{} ∧ prev\_foot({\tt p}+{\tt s})=\_ {}\\{} ∧ flags({\tt p}+{\tt s})=\_\_}{set\_free\_with\_pinuse(p,s,n)}{size({\tt p})={\tt s} ∧ flags({\tt p})=\unsetC\setP {}\\{} ∧ prev\_foot(next({\tt p}))={\tt s} {}\\{} ∧ flags(next({\tt p}))=\_\unsetP} \\
+tchunk & \text{malloc\_tree\_chunk} \\
+tchunkptr & \text{tchunk*} \\
+tbinptr & \text{tchunk*} \\
+leftmost\_child(t) & \left\{\begin{array}{ll}child_0({\tt *t}) & \textrm{if $child_0({\tt *t}) ≠ 0$} \\ child_1({\tt *t}) & \textrm{otherwise}\end{array}\right. \\
+NSMALLBINS & 32 \\
+NTREEBINS & 32 \\
+SMALLBIN\_SHIFT & 3 \\
+SMALLBIN\_WIDTH & 8 \\
+TREEBIN\_SHIFT & 8 \\
+MIN\_LARGE\_SIZE & 256 \\
+MAX\_SMALL\_SIZE & 255 \\
+MAX\_SMALL\_REQUEST & 244 \\
+mstate & \text{struct malloc\_state} \\
+mparams & \text{struct malloc\_params} \\
+is\_small(s) & {\tt s} < 256 \\
+small\_index(s) & \floor{{\tt s}/8} \\
+small\_index2size(i) & 8×{\tt i} \\
+MIN\_SMALL\_INDEX & 2 \\
+\Seqspec{{\tt smallbins}[2{\tt i}+2]↦C_1 * {\tt smallbins}[2{\tt i}+3]↦C_2}{x := smallbin\_at(M,i)}{{\tt x}.{\tt fd} ↦ C_1 * {\tt x}.{\tt bk} ↦ C_2} \\
+treebin\_at(M,i) & {\tt treebins}[{\tt i}] \\
+\Seqspec{{\tt I}=\_}{compute\_tree\_index(S,I)}{{\tt I}=\left\{\begin{array}{ll} 0 & \textrm{if ${\tt S}<256$} \\ 31 & \textrm{if ${\tt S}>2^{24}$} \\ 2(\log_2{\floorpow{{\tt S}}-8}) & \textrm{if $0≤\fracpow{{\tt S}} < \tfrac{1}{2}\floorpow{{\tt S}}$} \\ 2(\log_2{\floorpow{{\tt S}}-8})+1 & \textrm{if $\tfrac{1}{2}\floorpow{{\tt S}} ≤\fracpow{{\tt S}} < \floorpow{{\tt S}}$} \end{array}\right.}\\ 
+bin\_for\_tree\_index(i) & \left\{\begin{array}{ll}31 & \textrm{if ${\tt i}=31$} \\ \floor{{\tt i}/2}+6 & \textrm{otherwise}\end{array}\right. \\
+leftshift\_for\_tree\_index(i) & \left\{\begin{array}{ll}0 & \textrm{if ${\tt i}=31$} \\ 25-\floor{{\tt i}/2} & \textrm{otherwise}\end{array}\right. \\
+minsize\_for\_tree\_index(i) & \left\{\begin{array}{ll}2 \SHIFTLEFT (\floor{{\tt i}/2}+7) & \textrm{if ${\tt i}$ even} \\ 3 \SHIFTLEFT (\floor{{\tt i}/2}+7) & \textrm{if ${\tt i}$ odd}\end{array}\right. \\
+idx2bit(i) & 1 \SHIFTLEFT {\tt i} \\
+\Seqspec{{\tt smallmap}[{\tt i}]=\_}{mark\_smallmap(M,i)}{{\tt smallmap}[{\tt i}]=1} \\
+\Seqspec{{\tt smallmap}[{\tt i}]=\_}{clear\_smallmap(M,i)}{{\tt smallmap}[{\tt i}]=0} \\
+smallmap\_is\_marked(M,i) & {\tt smallmap}[{\tt i}]=1 \\
+\Seqspec{{\tt treemap}[{\tt i}]=\_}{mark\_treemap(M,i)}{{\tt treemap}[{\tt i}]=1} \\
+\Seqspec{{\tt treemap}[{\tt i}]=\_}{clear\_treemap(M,i)}{{\tt treemap}[{\tt i}]=0} \\
+treemap\_is\_marked(M,i) & {\tt treemap}[{\tt i}]=1 \\
+least\_bit(x) & \left\{\begin{array}{ll}\mathbf{0} \stackrel{i}{1}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if {\tt x}=0} \end{array}\right. \\
+left\_bits(x) & \left\{\begin{array}{ll}\mathbf{1} \stackrel{i}{0}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if ${\tt x}=0$}\end{array}\right. \\
+same\_or\_left\_bits(x) & \left\{\begin{array}{ll}\mathbf{1} \stackrel{i}{1}\mathbf{0} & \textrm{if ${\tt x}_i=1 ∧ ∀j<i．{\tt x}_j=0 \}$} \\ \mathbf{0} & \textrm{if ${\tt x}=0$}\end{array}\right. \\
+\Seqspec{{\tt I}=\_}{compute\_bit2idx(X,I)}{{\tt X≠0} ⇒ {\tt I}=\log_2 {\tt X}} \\
+\Seqspec{p}{mark\_inuse\_foot(M,p,s)}{p} \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p}) = \_P {}\\{} ∧ flags({\tt p}+{\tt s}) = C\_ }{set\_inuse(M,p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p}) = \setC P {}\\{} ∧ flags(next({\tt p})) = C\setP } \\
+\Seqspec{size({\tt p})=\_ ∧ flags({\tt p}) = \_\_ {}\\{} ∧ flags({\tt p}+{\tt s}) = C\_ }{set\_inuse\_and\_pinuse(M,p,s)}{size({\tt p})={\tt s} ∧ flags({\tt p}) = \setC\setP {}\\{} ∧ flags(next({\tt p})) = C\setP } \\
+\Seqspec{size({\tt p})=\_ {}\\{} ∧ flags({\tt p}) = \_\_}{set\_inuse\_and\_pinuse\_of\_inuse\_chunk(M,p,s)}{size({\tt p})={\tt s} {}\\{} ∧ flags({\tt p}) = \setC\setP} \\
+\end{longtable}
+\end{tt}
+
+\chapter{State}
+
+\newcommand{\fd}[2]{{#1} \mapstosup{{\sf fd}} {#2}}
+\newcommand{\bk}[2]{{#1} \mapstosup{{\sf bk}} {#2}}
+\newcommand{\prevfoot}[2]{{#1} \mapstosup{{\sf prevfoot}} {#2}}
+\newcommand{\fdbk}{}
+\renewcommand{\size}[2]{{#1} \mapstosup{{\sf size}} {#2}}
+\newcommand{\pinuse}[2]{{#1} \mapstosup{{\sf pinuse}} {#2}}
+\newcommand{\cinuse}[2]{{#1} \mapstosup{{\sf cinuse}} {#2}}
+\newcommand{\smallsize}[1]{\lvert{#1}\rvert}
+\newcommand{\treesize}[1]{\lVert{#1}\rVert}
+\newcommand{\arena}[2]{{\it arena}({#1},{#2})}
+\newcommand{\sorted}[2]{{\it sorted}({#1},{#2})}
+\newcommand{\coalesced}[1]{{\it coalesced}({#1})}
+\newcommand{\state}[1]{{\it state}({#1})}
+\newcommand{\invariant}{{\it invariant}}
+\newcommand{\token}[2]{{\it token}({#1},{#2})}
+\newcommand{\block}[4][]{{\it block}^{#1}\ifthenelse{\equal{#2}{}}{}{({#2},{#3},{#4})}}
+\newcommand{\ublock}[4][]{{\it ublock}^{#1}\ifthenelse{\equal{#2}{}}{}{({#2},{#3},{#4})}}
+\newcommand{\ablock}[4][]{{\it ablock}^{#1}\ifthenelse{\equal{#2}{}}{}{({#2},{#3},{#4})}}
+\newcommand{\bin}[3]{{\it bin}({#1},{#2},{#3})}
+\newcommand{\bnode}[5][]{\ifthenelse{\equal{#1}{}}{{\it bnode}\,{#2}\,}{({\it bnode}\,{#2})^{#1}}({#3},{#4},{#5})}
+\newcommand{\smallbin}[2]{{\it smallbin}_{#1}({#2})}
+\newcommand{\treebin}[2]{{\it treebin}_{#1}({#2})}
+\newcommand{\uplusminus}{\mathbin{{\uplus}\!{-}}}
+\newcommand{\victim}[1]{{\it victim}({#1})}
+\newcommand{\topchunk}[1]{{\it topchunk}({#1})}
+\newcommand{\upto}{\mathbin{..}}
+
+
+Shorthand:
+\[
+\begin{array}{rcl}
+\smallsize i &\eqdef& \{8i\} \\
+\treesize i &\eqdef& \texttt{compute\_tree\_index}^{-1}(i) \\
+{\sf w} &\eqdef& 4 \\
+x \uplus y &\eqdef&  \begin{cases} x ∪ y & \text{if $x ∩ y = \{\}$} \\ \text{undefined} & \text{otherwise}\end{cases}\\[3mm]
+x \uplusminus y &\eqdef&  \begin{cases} x-y & \text{if $y ⊆ x$} \\ \text{undefined} & \text{otherwise}\end{cases} \\[3mm]
+a \partialdiv b &\eqdef& \begin{cases} a/b & \text{if $b$ divides $a$} \\ \text{undefined} & \text{otherwise}\end{cases}
+\end{array}
+\]
+
+\noindent Predicates:
+
+\begin{longtable}{RCL}
+\prevfoot{x}{s} &\eqdef& x ↦ s
+\\
+\size{x}{s} &\eqdef& x+1{\sf w} ↦_{[31\upto3]} s\partialdiv 8
+\\
+\pinuse{x}{b} &\eqdef& x+1{\sf w} ↦_{[0]} b
+\\
+\cinuse{x}{b} &\eqdef& x+1{\sf w} ↦_{[1]} b
+\\
+\fd{x}{y} &\eqdef& x+2{\sf w} ↦ y 
+\\
+\bk{x}{y} &\eqdef& x+3{\sf w} ↦ y 
+\\
+\ublock{x}{y}{B} &\eqdef& \ml{{\sf let} s=y-x {\sf in} ∃n．B = \{x+2{\sf w} \ptoU n{\sf w}\}  *  (n+1){\sf w}=s {}\\{}
+*  \frac12(\size{x}{s})  *  \pinuse{y}{0}  *  \cinuse{x}{0} {}\\{}
+*  s≥4{\sf w}  *  \iterstar[s\partialdiv{\sf w}]{i=4}．x+i{\sf w}↦\underscore  *  \prevfoot{y}{s} }
+\\
+\ablock{x}{y}{B} &\eqdef& \ml{{\sf let} s=y-x {\sf in} ∃n．B = \{x+2{\sf w} \ptoA n{\sf w}\}  *  (n+1){\sf w}≤s {}\\{}
+*  \size{x}{s}  *  \pinuse{y}{1}  *  \cinuse{x}{1} {}\\{}
+*  s≥4{\sf w}  *  \iterstar[s\partialdiv{\sf w}+1]{i=n+2}．x+i{\sf w}↦\underscore } 
+\\
+\block{}{}{} &\eqdef& {\ublock{}{}{}} ∨ {\ablock{}{}{}} 
+\\
+\bin{S}{x}{U} &\eqdef& \ml{ (U=\{\}  *  \fd{x}{\underscore}  *  \bk{x}{\underscore}) {}\\{}
+∨ (∃y．\fd{x}{y}  * \bk{y}{x}  *  \bnode[*]{S}{y}{x}{U}) } 
+\\
+\bnode{S}{x}{y}{U} &\eqdef& \ml{∃s．\fd{x}{y}  * \bk{y}{x}  *  U=\{x+2{\sf w} ↦ s-1{\sf w}\}  *  \frac12(\size{x}{s})  *  s ∈ S }
+\\
+\sorted{L}{\sqsubseteq} &\eqdef& ∀i,j．i≤j ⇒ L(i) \sqsubseteq L(j)
+\\ 
+\coalesced{B} &\eqdef& ∃L．\ran{L} = B  *  \sorted{L}{≤_1}  *  ∄i．(L(i))_3 = (L(i+1))_3 = {\sf u}
+\\
+\arena{B}{t} &\eqdef& \ml{\coalesced{B\uplus t}  *  \pinuse{\tt start}{1}  *  \prevfoot{\tt start}{\underscore} {}\\{} *  \block[*]{{\tt start}}{{\tt top}}{B}} 
+\\
+\smallbin{i}{U} &\eqdef& i∈[0\upto32)  *  \bin{{\smallsize i}}{{\tt smallbin}+2i{\sf w}}{ U}  *  {\tt smallmap}_{[i]}=(U≠\{\}) 
+\\
+\treebin{i}{U} &\eqdef& i∈[0\upto32)  *  \bin{{\treesize i}}{{\tt treebins}+i{\sf w}}{U}  *  {\tt treemap}_{[i]}=(U≠\{\}) 
+\\
+\victim{v} &\eqdef& \ml{({\tt dvsize}=0  *  v=\{\}) ∨ {}\\{}
+({\tt dvsize}\partialdiv 8 ∈ [2\upto32)  *  v=\{{\tt dv}+2{\sf w} ↦_{\sf u} {\tt dvsize}-1{\sf w}\} {}\\{}
+ *  \fd{\tt dv}{\underscore}  *  \bk{\tt dv}{\underscore}  *  \frac12(\size{\tt dv}{\tt dvsize}))} 
+\\
+\topchunk{t} &\eqdef& \ml{t=\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\}  *  \cinuse{\tt top}{0}  *  \size{\tt top}{\tt topsize} {}\\{}*  {\tt topsize}\partialdiv 8 ∈ [0\upto2^{29}-8]  *  \iterstar[{\tt topsize}/{\sf w}]{i=2}．{\tt top}+i{\sf w} ↦ \underscore}
+\\
+\state{A} &\eqdef& \ml{∃\{U_i\mid i∈[0\upto64)\},v,t．\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{t} {}\\{}
+*   \iterstar[32]{i=0}．\smallbin{i}{U_i}  *  \iterstar[32]{i=0}．\treebin{i}{U_{i+32}}  *  \victim{v}  *  \topchunk{t}} 
+\end{longtable}
+
+\begin{lemma}\label{lem:coalesced} The assertion
+\[
+\block{x}{y}{B_1}  *  \ablock{y}{z}{B_2}  *  \coalesced{B_1\uplus B_2 \uplus B_3}\]
+implies
+\[
+\ublock{x}{y}{B_1}  *  \ablock{y}{z}{B_2}  *  \coalesced{B_1\uplus B_2 \uplus B_3}.
+\]
+\end{lemma}
+
+
+\chapter{Auxiliary operations}\label{chap:smallbins_and_trees}
+
+\section{\tt set\_inuse\_and\_pinuse}
+
+TODO: We need {\tt s} to be a multiple of 8 (or else return $\floor[8]{{\tt s}}$).
+
+Specification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \pinuse{{\tt p}+{\tt s}}{\underscore}}£
+set_inuse_and_pinuse(M,p,s)
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}  *  \pinuse{{\tt p}+{\tt s}}{1}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \pinuse{{\tt p}+{\tt s}}{\underscore}}£
+p->head = (s|PINUSE_BIT|CINUSE_BIT);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}  *  \pinuse{{\tt p}+{\tt s}}{\underscore}}£
+((mchunkptr)(((char*)p) + s))->head |= PINUSE_BIT;
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}  *  \pinuse{{\tt p}+{\tt s}}{1}}£
+\end{lstlisting}
+
+\section{\tt set\_size\_and\_pinuse\_of\_free\_chunk}
+
+TODO: We need {\tt s} to be a multiple of 8.
+
+Specification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \prevfoot{{\tt p}+{\tt s}}{\underscore}}£
+set_size_and_pinuse_of_free_chunk(p,s)
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{0}  *  \prevfoot{{\tt p}+{\tt s}}{\tt s}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}  *  \prevfoot{{\tt p}+{\tt s}}{\underscore}}£
+p->head = (s|PINUSE_BIT);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{0}  *  \prevfoot{{\tt p}+{\tt s}}{\underscore}}£
+set_foot(p,s);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{0}  *  \prevfoot{{\tt p}+{\tt s}}{\tt s}}£
+\end{lstlisting}
+
+\section{\tt set\_size\_and\_pinuse\_of\_inuse\_chunk}
+
+TODO: We need {\tt s} to be a multiple of 8 (or else return $\floor[8]{{\tt s}}$).
+
+Specification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}}£
+set_size_and_pinuse_of_inuse_chunk(M,p,s)
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}}£
+\end{lstlisting}
+
+\noindent Verification:
+\begin{lstlisting}
+£\ass{\size{\tt p}{\underscore}  *  \pinuse{\tt p}{\underscore}  *  \cinuse{\tt p}{\underscore}}£
+p->head = (s|PINUSE_BIT|CINUSE_BIT);
+£\ass{\size{\tt p}{\tt s}  *  \pinuse{\tt p}{1}  *  \cinuse{\tt p}{1}}£
+\end{lstlisting}
+
+
+\section{\tt insert\_small\_chunk}
+
+Specification:
+\begin{lstlisting}
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{⌊{\tt S}/8⌋}}{U}}£
+#define insert_small_chunk(M, P, S) {\
+  bindex_t I  = small_index(S);\
+  mchunkptr B = smallbin_at(M, I);\
+  mchunkptr F = B;\
+  assert(S >= MIN_CHUNK_SIZE);\
+  if (!smallmap_is_marked(M, I))\
+    mark_smallmap(M, I);\
+  else if (RTCHECK(ok_address(M, B->fd)))\
+    F = B->fd;\
+  else {\
+    CORRUPTION_ERROR_ACTION(M);\
+  }\
+  B->fd = P;\
+  F->bk = P;\
+  P->fd = F;\
+  P->bk = B;\
+}
+£\ass{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}£
+\end{lstlisting}
+
+\begin{filecontents*}{layoutertemp.tex}
+printcols 0;
+setstate [(a,2); (b,16); (d,45); (g,22); (h,22); (i,40); (j,2); (f,38); (e,25); (c,16); (k,25); (l,25); (m,25)] [] [] [];
+ribOS(d-c) "\smallbin{{⌊{\tt S}/8⌋}}{U}", ribOO(k) "\frac12(\size{{\tt P}}{ {\tt S}})", ribOO(l) "\fd{{\tt P}}{\underscore}", ribOO(m) "\bk{{\tt P}}{\underscore}";
+com(d-c) "bindex\_t I = small\_index(S)";
+ribSO(c) "{\tt S}=8{\tt I}", ribSS(d-e) "\smallbin{\tt I}{U}";
+jus(d-e) "Defn of \emph{smallbin}.";
+ribSO(d) "{\tt smallmap}_{[{\tt I}]}=(U≠\{\})", ribSO(e) "0≤{\tt I}<32", ribSS(g-f) "\bin{{\smallsize {\tt I}}}{{\tt smallbin}+2{\tt I}{\sf w}}{U}", twist(c,k,l)(k,l,c), ribOO(c);
+com(g-f) "mchunkptr B = smallbin\_at(M,I)";
+ribSO(f) "{\tt B} = {\tt smallbin}+2{\tt I}{\sf w}", ribSS(g-i) "\bin{{\smallsize {\tt I}}}{\tt B}{U}", twist(e,k,l)(k,l,e);
+com(b) "F = B", jus(g-i) "Defn of \emph{bin}.";
+ribSM(b) "{\tt F}={\tt B}", ribOM(d), ribSM[13](g-i) "(\fd{{\tt B}}{\underscore}  *  \bk{{\tt B}}{\underscore}  *  U=\{\}) ∨ {}\\{}
+(∃F'．\fd{{\tt B}}{F'}  * \bk{F'}{{\tt B}}  *  \bnode[*]{{\smallsize {\tt I}}}{F'}{{\tt B}}{U})", twist(f,k,l)(k,l,f);
+bcases c1 (a-j) "if (!smallmap\_is\_marked(M, I))";
+ribFS(b), ribFS(d) "{\tt smallmap}_{[{\tt I}]}=0", ribFS(g-i);
+jus(b-i) "Since $U=\{\}$, deduce $F'={\tt B}$ in third ribbon.";
+ribSS(d) "{\tt smallmap}_{[{\tt I}]}=0", ribSO(g) "\fd{\tt B}{\underscore}", ribSO(h) "\bk{\tt F}{\underscore}", ribSO(i) "\bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{{\tt B}}{U}";
+com(d) "mark\_smallmap(M,I)";
+ribSF(d) "{\tt smallmap}_{[{\tt I}]}=1", ribOF(g), ribOF(h), ribOF(i), twist(e,c,m)(c,m,e), ribOO(e);
+ccases c1 "else";
+ribFS(b), ribFS(d) "{\tt smallmap}_{[{\tt I}]}=1", ribFS(g-i);
+jus(b), jus(d-i) "Take second disjunct in third ribbon.";
+ribSO(d) "{\tt smallmap}_{[{\tt I}]}=1", ribSS(g-i) "∃F'．\fd{{\tt B}}{F'}  * \bk{F'}{{\tt B}}  *  \bnode[*]{{\smallsize {\tt I}}}{F'}{{\tt B}}{U}";
+com(g-i) "F = B->fd";
+ribOF(d), ribSF(g) "\fd{\tt B}{\underscore}", ribSF(h) "\bk{\tt F}{\underscore}", ribSF(i) "\bnode[*]{{\smallsize {\tt I}}}{{\tt F}}{{\tt B}}{U}";
+ecases c1;
+ribMO(d), ribMS(g), ribMS(h), ribMO(i), ribOS(l), ribOS(m);
+com(g) "B->fd = P", com(h) "F->bk = P", com(l) "P->fd = F", com(m) "P->bk = B";
+ribOS(d), ribSO(g) "\fd{\tt B}{\tt P}", ribSS(h) "\bk{\tt F}{\tt P}", ribOS(i), ribOS(c), ribOS(k), ribSS(l) "\fd{\tt P}{\tt F}", ribSO(m) "\bk{\tt P}{\tt B}";
+jus(d), jus(h-c) "Add one more \emph{bnode} to list.";
+ribSO(d) "{\tt smallmap}_{[{\tt I}]}= (\{\} ≠ {}\\{} (U\uplus \{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}))", ribSO(h-l) "\bnode[*]{{\smallsize {\tt I}}}{{\tt P}}{{\tt B}}{U \uplus \{{\tt P}+2{\sf w} ↦ {\tt S}-1{\sf w}\}}", ribSO(c) "{\tt S}=8{\tt I}";
+ribOS(f), ribOS(g), twist[13](c,m,e)(m,e,c), ribOS(h-l), ribOS(m), ribOO(c);
+jus(g-m) "Defn of \emph{bin}.";
+ribOS(d), ribOS(e), ribSS(g-m) "\bin{{\smallsize {\tt I}}}{{\tt smallbin}+2{\tt I}{\sf w}}{U \uplus \{{\tt P}+2{\sf w} ↦ {\tt S}-1{\sf w}\}}";
+jus(d-e) "Defn of \emph{smallbin}.";
+ribSS(d-e) "\smallbin{\tt I}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}", ribOS(c);
+jus(d-c);
+ribSO(d-c) "\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}";
+\end{filecontents*}
+%\makeribbonproof
+
+\newpage
+\section{{\tt unlink\_small\_chunk}} 
+
+Specification:  
+\begin{lstlisting}   
+£\ass{\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}}£
+#define unlink_small_chunk(M, P, S) {\
+  mchunkptr F = P->fd;\
+  mchunkptr B = P->bk;\
+  bindex_t I = small_index(S);\
+  assert(P != B);\
+  assert(P != F);\
+  assert(chunksize(P) == small_index2size(I));\
+  if (F == B)\
+    clear_smallmap(M, I);\
+  else if (RTCHECK((F == smallbin_at(M,I) || ok_address(M, F)) &&\
+                   (B == smallbin_at(M,I) || ok_address(M, B)))) {\
+    F->bk = B;\
+    B->fd = F;\
+  }\
+  else {\
+    CORRUPTION_ERROR_ACTION(M);\
+  }\
+}
+
+£\ass{\frac12(\size{{\tt P}}{ {\tt S}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{⌊{\tt S}/8⌋}}{U}}£
+£\ £
+\end{lstlisting}  
+
+\begin{filecontents*}{layoutertemp.tex}
+setstate [(a,2); (b,2); (c,2); (d,42); (e,2); (f,15); (g,2); (h,2); (i,21); (j,16); (k,2); (l,25); (m,2); (n,65); (o,2); (q,21); (s,36); (p,16); (r,22); (t,2); (u,2); (v,30); (w,2); (x,2); (y,2)] [(d,v)] [] [];
+ribOS (d-v) "\smallbin{{⌊{\tt S}/8⌋}}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}";
+jus (d-v) "Defn of \emph{smallbin}";
+bshape sx (a-y) "∃x";
+bshape si (c-w) "∃i"; 
+ribSO (d) "{\tt S} = 8i  *  0≤i<32 {}\\{} *  x={\tt smallbin}+2i{\sf w}",
+ribSS (i-r) "\bin{{\smallsize i}}{x}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}",
+ribSO (v) "{\tt smallmap}_{[i]}=1";
+jus (i-r) "Defn of \emph{bin}";
+bshape sy (g-u) "∃y"; 
+ribSO (i) "\fd{x}{y}", ribSO (j) "\bk{y}{x}", ribSS (l-r) "\bnode[*]{{\smallsize i}}{y}{x}{U\uplus\{{\tt P}+2{\sf w}↦{\tt S}-1{\sf w}\}}";
+jus (l-r) "Split \emph{bnode} list into three.";
+bshape su (k-t) "∃U_1,U_2";
+ribSO (l) "U=U_1\uplus U_2", ribSS (n) "\bnode[*]{{\smallsize i}}{y}{{\tt P}}{U_1}", ribSO (q-r) "∃F．\fd{{\tt P}}{F} {}\\{}  *  \bk{F}{{\tt P}} {}\\{}  *  \frac12(\size{{\tt P}}{ {\tt S}}) {}\\{}  *  \bnode[*]{{\smallsize i}}{F}{x}{U_2}",
+extend su (b-x);
+jus (n) "Unroll RTC one step.";
+ribSO (n) "(y={\tt P}  *  U_1=\{\}) ∨ (∃B．{}\\{}\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B})",
+ribOS (q-r);
+ribOS (n), com (q-r) "mchunkptr F = P->fd;"; 
+jus [12] (n) "Extend scope of $∃B$. Choose $B=x$ in \\ first disjunct.", ribSO (p) "\fd{\tt P}{\tt F}", ribSO (q) "\bk{\tt F}{\tt P}", ribSO (r) "\frac12(\size{\tt P}{\tt S})", ribSO (s) "\bnode[*]{{\smallsize i}}{\tt F}{x}{U_2}";
+bshape sb (m-o) "∃B";
+ribSO [15] (n) "(y={\tt P}  *  U_1=\{\} * B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B})", (*twist (p,q) (q,p), twist (r,s) (s,r),*) extend sb (h-o);
+twist [12](l,m,n) (n,m,l), (* ribOO (n),*) (* twist (p,s) (s,p);*)
+ribOS (i), ribOS (j), ribOS (n), ribOO (l);
+jus (i-n) "Distribute $\fd{x}{y}  *  \bk{y}{x}$ into disjunction.",
+extend sb (h-m);
+ribSS [18] (i-n) "(\fd{B}{\tt P}  *  \bk{\tt P}{B}  *  y={\tt P}  *  U_1=\{\}  *  B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} *  \fd{B}{\tt P}  *  \bk{\tt P}{B}  *  \fd{x}{y}  *  \bk{y}{x})";
+jus [13] (i-n) "Distribute $\fd{B}{\tt P}  *  \bk{\tt P}{B}$ out of disjunction. Forget \\ $y={\tt P}$ from first disjunct.",
+twist (i,j,k,n) (n,k,i,j), twist (l,o,q) (q,o,l);
+ribSS [18] (n) "(U_1=\{\}  *  B=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{B}{U_1\uplusminus\{B+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})", ribSS (i) "\fd{B}{\tt P}", ribSS (j) "\bk{\tt P}{B}", extend sy (g-o);
+eshape sb;
+com (n-j) "mchunkptr B = P->bk;";
+ribSS [18] (n) "(U_1=\{\}  *  {\tt B}=x) ∨ {}\\{}(\bnode[*]{{\smallsize i}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})", ribSO (i) "\fd{\tt B}{\tt P}", ribSO (j) "\bk{\tt P}{\tt B}", extend sy (h-k), twist (o,l,s) (s,l,o), twist (p,r,t,u,v) (v,t,p,r,u) ;
+eshape sy;
+ribSO [18] (n) "(U_1=\{\}  *  {\tt B}=x) ∨ ∃y．{}\\{}(\bnode[*]{{\smallsize i}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})", twist (j,m,q,s,l) (q,m,s,j,l);
+ribOS (d), ribOS (n), twist [18] (j,l,o,v,t) (l,o,v,t,j), ribOS(s), ribOS(v), ribOO (j);
+eshape si;
+com (d-v) "bindex\_t I = small\_index(S);", ribOS [0] (j), ribOS [0] (p);
+ribSO [18] (d) "{\tt S}=8{\tt I}  *  0≤{\tt I}<32 {}\\{} *  x={\tt smallbin}+2{\tt I}{\sf w}", ribSO (n) "(U_1=\{\}  *  {\tt B}=x) ∨ ∃y． {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})", ribSO(s) "\bnode[*]{{\smallsize {\tt I}}}{\tt F}{x}{U_2}", ribSO(v) "{\tt smallmap}_{[{\tt I}]}=1", ribSO (j) "\bk{\tt P}{\underscore}", ribSO (p) "\fd{\tt P}{\underscore}";
+twist (f,g) (g,f);
+bcases c1 (e-t) "if (F==B) \{";
+ribSS (f) "{\tt B} = {\tt F}", ribOS(n), ribOS(i), ribOS(q), ribOS(s);
+jus [12] (f-s) "Ribbons 1 and 4 contradict second disjunct of ribbon 2; hence ${\tt B}={\tt F}=x$ and $U_1=\{\}$. Since ${\tt F}=x$, \\ ribbon 5 implies $U_2=\{\}$. (See Lemma 1, above.)";
+ribSO(i) "\fd{x}{\underscore}", ribSO (q) "\bk{x}{\underscore}", ribSS(s) "U_1=\{\}  *  U_2=\{\}", ribOS(l);
+ribSS(s-l) "U=\{\}", ribOS(v);
+com (s-v) "clear\_smallmap(M,I);";
+ribOS (i), ribOS (q), ribSS (s-l) "U=\{\}", ribSO (v) "{\tt smallmap}_{[{\tt I}]} {}\\{} =(U≠\{\})";
+jus (n-l) "Defn of \emph{bin}.";
+ribSO (n-l) "\bin{\smallsize {\tt I}}{x}{U}";
+ccases c1 "\} else \{";
+ribSS (f) "{\tt B}≠{\tt F}", ribOS [18] (n) "(U_1=\{\}  *  {\tt B}=x) ∨ ∃y． {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})", ribOO (i) "\fd{\tt B}{\tt P}", ribOO (q) "\bk{\tt F}{\tt P}", ribOS (s) "\bnode[*]{{\smallsize {\tt I}}}{\tt F}{x}{U_2}", ribOS (l) "U=U_1\uplus U_2", ribOS (v) "{\tt smallmap}_{[{\tt I}]}=1";
+jus (f-v) "From ribbons 1, 2 and 3, deduce $U_1$ and $U_2$ can't both be empty. Extend scope of $∃y$ in ribbon 2, choosing $y={\tt F}$ in first disjunct.";
+ribSO (n) "∃y．(y={\tt F}  *  U_1=\{\}  *  {\tt B}=x) ∨ {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x})", ribOS (i), ribOS (q), ribSO (s) "\bnode[*]{{\smallsize {\tt I}}}{\tt F}{x}{U_2}", ribSO(l) "U=U_1\uplus U_2", ribSO(v) "{\tt smallmap}_{[{\tt I}]} {}\\{} =(U≠\{\})";
+com(i) "B->fd = F", com(q) "F->bk = B";
+ribOS (n), ribSS (i) "\fd{\tt B}{\tt F}", ribSS (q) "\bk{\tt F}{\tt B}";
+jus (n-q) "Distribute $\fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B}$ into disjunction.";
+bshape sy (h-m) "∃y";
+ribSS [18] (n-q) "(y={\tt F}  *  U_1=\{\}  *  {\tt B}=x  *  \fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B}) ∨ {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} * \fd{x}{y}  *  \bk{y}{x}  *  \fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B})", extend sy (h-o);
+jus (n-q) "Distribute $\fd{x}{y}  *  \bk{y}{x}$ out of disjunction.", twist (n,k,i,q) (i,q,k,n);
+ribSO (i) "\fd{x}{y}", ribSO (q) "\bk{y}{x}", ribSS [18] (n) "(y={\tt F}  *  U_1=\{\}) ∨ {}\\{}(\bnode[*]{{\smallsize {\tt I}}}{y}{\tt B}{U_1\uplusminus\{{\tt B}+2{\sf w}↦\underscore\}} {}\\{} *  \fd{\tt B}{\tt F}  *  \bk{\tt F}{\tt B})";
+jus (n) "Roll RTC.";
+ribSS (n) "\bnode[*]{{\smallsize {\tt I}}}{y}{\tt F}{U_1}", ribOS(s), ribOS(l);
+jus (n-l) "Merge two \emph{bnode} lists.";
+ribOS (i), ribOS(q), ribSS (n-l) "\bnode[*]{{\smallsize {\tt I}}}{y}{x}{U}";
+eshape sy;
+jus (i-l) "Defn of \emph{bin}.";
+ribSO (i-l) "\bin{\smallsize {\tt I}}{x}{U}";
+ecases c1 "\}";
+twist [6] (a) (a);
+eshape su;
+ribOS(d), ribOS(i-l), ribOS(v);
+jus(d-v) "Defn of \emph{smallbin}.";
+ribSO(d-v) "\smallbin{{⌊{\tt S}/8⌋}}{U}";
+eshape sx;
+ribOO (d-v) "\smallbin{{⌊{\tt S}/8⌋}}{U}", ribOO (j) "\bk{\tt P}{\underscore}", ribOO (p) "\fd{\tt P}{\underscore}", ribOO (r) "\frac12(\size{\tt P}{\tt S})";
+\end{filecontents*}
+%\makeribbonproof
+
+\newpage
+\section{{\tt unlink\_first\_small\_chunk}}
+
+Specification:
+\begin{lstlisting}
+£\ass{∃F．{\tt B}={\tt smallbin}+2{\tt I}{\sf w}  *  0≤{\tt I}<32 {}\\{}
+*  \fd{\tt B}{\tt P}  *  \bk{\tt P}{\tt B}  *  \frac12(\size{{\tt P}}{8{\tt I}})  *  \fd{\tt P}{F}  *  \bk{F}{\tt P} {}\\{}
+*  \bnode[*]{{\smallsize {\tt I}}}{F}{\tt B}{U}  *  {\tt smallmap}_{[{\tt I}]}=1}£
+#define unlink_first_small_chunk(M, B, P, I) {\
+  mchunkptr F = P->fd;\
+  assert(P != B);\
+  assert(P != F);\
+  assert(chunksize(P) == small_index2size(I));\
+  if (B == F)\
+    clear_smallmap(M, I);\
+  else if (RTCHECK(ok_address(M, F))) {\
+    B->fd = F;\
+    F->bk = B;\
+  }\
+  else {\
+    CORRUPTION_ERROR_ACTION(M);\
+  }\
+}
+£\ass{\frac12(\size{{\tt P}}{8{\tt I}})  *  \fd{{\tt P}}{\underscore}  *  \bk{{\tt P}}{\underscore}  *  \smallbin{{\tt I}}{U}}£
+£\ £
+\end{lstlisting}
+
+\begin{filecontents*}{layoutertemp.tex}
+printcols 0;
+setstate [(c,2); (d,17); (e,23); (f,35); (g,2); (h,42); (i,23); (j,2); (k,37); (l,17); (m,23)] [(d,d);(e,e);(f,f);(h,h);(i,i);(k,k);(l,l);(m,m)] [] [(sf,(c,g))];
+ribOS(d) "\fd{\tt P}{F}", ribOS(e) "\bk{F}{\tt P}", ribOS(f) "\bnode[*]{{\smallsize {\tt I}}}{F}{\tt B}{U}", ribOO(h) "{\tt smallmap}_{[{\tt I}]}=1", ribOO(i) "\fd{\tt B}{\tt P}", ribOO(k) "{\tt B}={\tt smallbin}+2{\tt I}{\sf w} {}\\{} *  0≤{\tt I}<32", ribOO(l) "\bk{\tt P}{\tt B}", ribOO(m) "\frac12(\size{{\tt P}}{8{\tt I}})";
+eshape sf, ribOS[0](l);
+com(d-f) "mchunkptr F = P->fd;", jus(l);
+ribSM(d) "\fd{\tt P}{\tt F}", ribSM(e) "\bk{\tt F}{\tt P}", ribSM(f) "\bnode[*]{{\smallsize {\tt I}}}{\tt F}{\tt B}{U}", ribOM(h), ribOM(i), ribSO(l) "\bk{\tt P}{\underscore}";
+bcases c1 (c-j) "if (B==F) \{";
+ribFO(d), ribFO(e) "{\tt B}={\tt F}", ribFO(f) "{\tt B}={\tt F}", ribFO(h), ribFO(i);
+ribOS(d), ribOS(e), ribOS(f), ribOS(h), ribOS[0](i);
+jus(d), jus(e), jus(f), com(h) "clear\_smallmap(M,I);", jus(i);
+ribSO[0](d) "\fd{\tt P}{\underscore}", ribSO[0](e) "\bk{\tt B}{\underscore}", ribSS(f) "U=\{\}", ribSS(h) "{\tt smallmap}_{[{\tt I}]}=0", ribSO(i) "\fd{\tt B}{\underscore}";
+jus(f-h);
+ribSO(f) "U=\{\}", ribSO(h) "{\tt smallmap}_{[{\tt I}]}=(U≠\{\})";
+ribOS(e), ribOS(f), twist(h,i)(i,h), ribOS(i);
+jus(e-i) "Defn of \emph{bin}.";
+ribOF(d), ribSF(e-i) "\bin{\smallsize{\tt I}}{\tt B}{U}", ribOF(h);
+ccases c1 "\} else \{";
+ribFO(d), ribFO(e), ribFS(f) "{\tt B}≠{\tt F}", ribFO(h), ribFO(i);
+ribOS(d), ribOS(e), ribSS[13](f) "\bnode[*]{{\smallsize {\tt I}}}{\tt F}{\tt B}{U} {}\\{} ∧ U≠\{\}", ribOS(h), ribOS(i);
+jus(d), com(e) "F->bk = B;", jus(f-h) "Move $U≠\{\}$ to next ribbon.", com(i) "B->fd = F;";
+ribSO(d) "\fd{\tt P}{\underscore}", ribSO(e) "\bk{\tt F}{\tt B}", ribSO(f) "\bnode[*]{{\smallsize {\tt I}}}{\tt F}{\tt B}{U}", ribSO(h) "{\tt smallmap}_{[{\tt I}]}=(U≠\{\})", ribSO(i) "\fd{\tt B}{\tt F}";
+twist(h,i)(i,h), ribOS(e), ribOS(f), ribOS(i);
+jus(e-i) "Defn of \emph{bin}.";
+ribOF(d), ribSF(e-i) "\bin{\smallsize{\tt I}}{\tt B}{U}", ribOF(h);
+ecases c1 "\}";
+ribMO(d), ribMS(e-i), ribMS(h), ribOS(k);
+jus(e-k) "Defn of \emph{smallbin}.";
+ribSO(e-k) "\smallbin{\tt I}{U}";
+\end{filecontents*}
+%\makeribbonproof
+
+
+\newpage
+\section{{\tt replace\_dv}}
+
+Specification:
+\begin{lstlisting}
+£\ass{∃v,\{U_i\mid i∈[0,64)\}．\texttt{least\_addr}=5  *  \iterstar[32]{i=0}\ldotp \treebin{i}{U_{i+32}} {}\\{}
+*  \arena{A_{\sf a} \uplus (\biguplus^{64}_{i=0}\ldotp U_i)_{\sf u} \uplus v \uplus \{{\tt P}+2{\sf w}↦_{\sf u} {\tt S}-1{\sf w}\}}{t} {}\\{}
+*  \iterstar[32]{i=0}\ldotp \smallbin{i}{U_i}  *  \victim{v}  *  \fd{\tt P}{\underscore} {}\\{} 
+*  \bk{\tt P}{\underscore}  *  \frac12(\size{\tt P}{\tt S})  *  0<{\tt S}<256}£
+#define replace_dv(M, P, S) {\
+  size_t DVS = M->dvsize;\
+  if (DVS != 0) {\
+    mchunkptr DV = M->dv;\
+    assert(is_small(DVS));\
+    insert_small_chunk(M, DV, DVS);\
+  }\
+  M->dvsize = S;\
+  M->dv = P;\
+}
+£\ass{∃v,\{U_i\mid i∈[0,64)\}．\texttt{least\_addr}=5  *  \iterstar[32]{i=0}\ldotp \treebin{i}{U_{i+32}} {}\\{}
+*  \arena{A_{\sf a} \uplus (\biguplus^{64}_{i=0}\ldotp U_i)_{\sf u} \uplus v}{t} {}\\{}
+*  \iterstar[32]{i=0}\ldotp \smallbin{i}{U_i}  *  \victim{v}}£
+£\ £
+\end{lstlisting}
+
+\begin{filecontents*}{layoutertemp.tex}
+printcols 1;
+setstate [(a,2);(b,2);(c,10);(d,11);(e,2);(f,40);(g,2);(h,50);(i,50);(j,2);(k,60);(r,2);(l,2);(m,2);(n,40);(o,2);(p,2);(q,2)] [
+((c,c),"\mrot{\texttt{least\_addr}=5}");
+((d,d),"\mrot{\iterstar[32]{i=0}\ldotp \treebin{i}{U_{i+32}}}");
+((f,f),"\emph{arena}(A_{\sf a} \uplus {}\\{} (\biguplus^{64}_{i=0}\ldotp U_i)_{\sf u} \uplus v \uplus {}\\{} \{{\tt P}+2{\sf w}↦_{\sf u} {\tt S}-1{\sf w}\})");
+((h,i),"\iterstar[32]{i=0}\ldotp \smallbin{i}{U_i}");
+((k,k),"\victim{v}");
+((n,n),"0<{\tt S}<256 {}\\{} *  \fd{\tt P}{\underscore} {}\\{} *  \bk{\tt P}{\underscore} {}\\{} *  \frac12(\size{\tt P}{\tt S})")
+] [] [(sv,(a,m));(su,(b,l))];
+restate;
+bcases c1 (g-r) "if (dvsize != 0) \{";
+ribOS[24](k) "v=\{{\tt dv}+2{\sf w}↦_{\sf u} {\tt dvsize}-1{\sf w}\} {}\\{} *  \fd{\tt dv}{\underscore}  *  \bk{\tt dv}{\underscore} {}\\{} *  \frac12(\size{\tt dv}{\tt dvsize}) {}\\{} *  0 < {\tt dvsize} < 256", ribOS(h-i);
+jus(h-k) "Note that $0≤\floor{{\tt dvsize}/8}<32$.";
+ribSO(h) "\iterstar{i∈[0,32)\uplusminus \{\floor{{\tt dvsize}/8}\}}\ldotp {}\\{} \smallbin{i}{U_i}", ribSS[13](i) "\smallbin{\floor{{\tt dvsize}/8}}{U_{\floor{{\tt dvsize}/8}}}", ribSS(k) "\ditto";
+com(i-k) "insert\_small\_chunk(dv, dvsize)";
+ribSO(i-k) "\smallbin{\floor{{\tt dvsize}/8}}{U_{\floor{{\tt dvsize}/8}} \uplus v}";
+ccases c1;
+ribOS(h-i), ribOS(k) "v=\{\}  *  {\tt dvsize}=0";
+jus(h-k) "Note that $0≤\floor{{\tt dvsize}/8}<32$.";
+ribSO(h) "\iterstar{i∈[0,32)\uplusminus \{\floor{{\tt dvsize}/8}\}}\ldotp {}\\{} \smallbin{i}{U_i}", ribSO[13](i-k) "\smallbin{\floor{{\tt dvsize}/8}}{U_{\floor{{\tt dvsize}/8}}\uplus v}";
+ecases c1 "\}";
+ribOS(d), ribOS(f), ribOS(h), ribOS(i-k);
+eshape su;
+eshape sv;
+jus(d-k) "Set $U_{\floor{{\tt dvsize}/8}}$ to $U_{\floor{{\tt dvsize}/8}}\uplus v$";
+bshape su (b-l) "∃U_0,\ldots,U_{63}";
+ribSO(d) "\ditto", ribSS[24](f) "\emph{arena}(A_{\sf a} \uplus {}\\{} (\biguplus^{64}_{i=0}\ldotp U_i)_{\sf u} \uplus {}\\{} \{{\tt P}+2{\sf w}↦_{\sf u} {}\\{} {\tt S}-1{\sf w}\})", ribSO(h-k) "\iterstar[32]{i=0}\ldotp \smallbin{i}{U_i}", ribOS(n), extend su (b-p);
+com(f-n) "dv = P; dvsize = S;";
+ribSO(f) "\emph{arena}(A_{\sf a} \uplus {}\\{} (\biguplus^{64}_{i=0}\ldotp U_i)_{\sf u} \uplus {}\\{} \{{\tt dv}+2{\sf w}↦_{\sf u} {}\\{} {\tt dvsize}-1{\sf w}\})", ribSS[24](n) "0<{\tt dvsize}<256 {}\\{} *  \fd{\tt dv}{\underscore} {}\\{} *  \bk{\tt dv}{\underscore} {}\\{} *  \frac12(\size{\tt dv}{\tt dvsize})";
+jus(n) "Defn of \emph{victim}.";
+ribSS[12](n) "\emph{victim}(\{{\tt dv}+2{\sf w} {}\\{} ↦_{\sf u} {\tt dvsize}-1{\sf w}\})", ribOS(f);
+jus(f-n) "Set $v$ to $\{{\tt dv}+2{\sf w} ↦_{\sf u} {\tt dvsize}-1{\sf w}\}$.";
+bshape sv (e-o) "∃v";
+ribSO[12](f) "\emph{arena}(A_{\sf a} \uplus v \uplus {}\\{} (\biguplus^{64}_{i=0}\ldotp U_i)_{\sf u})", ribSO(n) "\victim{v}", extend sv (a-q);
+\end{filecontents*}
+%\makeribbonproof
+
+
+\chapter{{\tt dlmalloc}}
+
+Specification:
+\begin{lstlisting}
+£\ass{\state A}£
+dlmalloc(bytes)
+£\ass{\state{A\uplus \{{\tt ret}↦ \ceil[{\sf w}]{{\tt bytes}}\}}  *  \iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt ret}+i{\sf w}↦\underscore  *  \frac12(\size{{\tt ret}-2{\sf w}}{\underscore})}£
+\end{lstlisting}
+
+\newpage
+
+\section{PAGE 1}
+
+\begin{filecontents*}{layoutertemp.tex}
+(* last used:  bb *)
+(* gaps at:    aw,j,s,t *)
+setstate [(g,2); (q,2); (ao,2); (c,2); (az,2); (a,2); (e,11); (ay,10); (ac,10); (b,10); (am,2); (z,10); (aa,15); (ab,2); (ae,15); (af,10); (ai,11);(aj,11);(ak,10);(al,11); (ag,10); (ah,11); (ad,2); (u,15); (d,10); (v,10);(at,10);(ax,10);(au,10);(av,10);(x,10);(y,13); (w,13); (f,2); (ba,2); (bb,2); (p,22); (m,2); (o,10); (k,10); (n,2); (as,10); (ar,10); (ap,10); (aq,10); (l,2); (an,2); (r,2); (h,2)] [((e,w),("\state A",true));((aq,aq),("\mrot{{\tt bytes}≥0}",true))] [] [] false true;
+(*\section{*)pendown 1; printcols 0;(*}*)
+restate[20];
+bcases c1 (g-h) "if (bytes <= MAX\_SMALL\_REQUEST) \{";
+ribOO(aq) "\mrot{{\tt bytes}∈[0\upto244]}";
+com[18](o-ap) "nb = (bytes < MIN\_REQUEST) {}\\{} ? MIN\_CHUNK\_SIZE {}\\{} : pad\_request(bytes);";
+ribSS[60](ar) "\mrot{{\tt nb}≥16 ∧ {\tt nb}≥ \ceil[{\sf w}]{{\tt bytes}+{\sf w}} ∧ 8|{\tt nb} }", ribOS(aq);
+com(o-aq) "idx = small\_index(nb);";
+ribSO(ar) "\ditto", ribSO(k) "\mrot{2{\tt idx}≥\ceil{{\tt bytes}/{\sf w}}+1}", ribSS[25](o) "\mrot{2≤{\tt idx}<32}", ribSO(aq) "\mrot{{\tt bytes}≥0}";
+com[12](p-o) "smallbits = gm->{}\\{}smallmap {>}{>} idx;";
+ribSO[32](p) "\mrot{∀i∈[0\upto32-{\tt idx})．{}\\{}{\tt smallbits}_{[i]} = {}\\{} {\tt smallmap}_{[i+{\tt idx}]}}", ribSO(o) "\ditto";
+bcases c2 (q-r) "if ((smallbits \& 0x3U) != 0) \{";
+ribOS(e-w), ribOS(ar), ribSO(ap) "\mrot{{\tt smallbits}_{[1\upto0]} ≠ 00}";
+jus(e-w) "Defn of \emph{state}.", jus(ar) "Kill.";
+bshape st (ao-bb) "∃t";
+bshape sv (az-ba) "∃v";
+bshape su (a-f) "∃U_0,\ldots,U_{63}";
+ribSO(ac) "\mrot{\topchunk{t}}", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{t}", ribSO(e) "\mrot{\iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}", ribSO(ay) "\mrot{\victim{v}}", ribSO(u-w) "\iterstar[32]{i=0}．\smallbin{i}{U_i}", ribOS[12](ap), ribOS(p);
+jus(p-ap);
+ribSS(p) "\ditto", ribOS(k), ribOS(o), ribSS[28](as-ap) "{\tt smallmap}_{[{\tt idx}]}{}\\{} =1 ∨ {}\\{} ({\tt idx}<31  *  {}\\{} {\tt smallmap}_{[{\tt idx}+1]}{}\\{} =1)";
+com(p-ap) "idx += \~{}smallbits \& 1;";
+ribSO(k) "\ditto", ribSO(o) "\ditto", ribSO[23](p) "\mrot{{\tt smallmap}_{[{\tt idx}]}{}\\{}=1}", twist(n,as,ar,ap,aq)(aq,n,as,ar,ap);
+extend st (ao-an);
+twist[13](bb,p,m,o,k,aq,n)(o,m,p,n,k,aq,bb), ribOO(o);
+extend sv (az-bb);
+extend su (a-m);
+ribOS(u-w), ribOS(o);
+jus(u-o) "Split off ${\tt idx}^{\rm th}$ smallbin.";
+ribSS(d-w) "\smallbin{\tt idx}{U_{\tt idx}}", ribSO(u) "\mrot{\iterstar{i∈[0\upto32)\uplusminus{\tt idx}}．{}\\{} \smallbin{i}{U_i}}", ribSO(o) "\ditto";
+com(d-w) "b = smallbin\_at(gm,idx);", extend su (a-f);
+ribSO(d) "\mrot{{\tt b}={\tt smallbin}+8{\tt idx}}", ribSO(v-y) "\mrot{\bin{\smallsize{\tt idx}}{\tt b}{U_{{\tt idx}}}}", ribSO[45](w) "\mrot{{\tt smallmap}_{[{\tt idx}]} = (U_{{\tt idx}} ≠ \{\})}", twist(o,m,p,n,k)(p,m,k,o,n);
+extend su (a-m);
+ribOS(w), ribOS(p);
+jus[12](w-p) "Deduce that ${\tt idx}^{\rm th}$ \\ smallbin isn't empty.";
+ribOS(v-y), ribSS[20](w) "\mrot{U_{\tt idx} ≠ \{\}}", ribSO(p) "\ditto";
+jus(v-w) "Defn of \emph{bin}.";
+ribSS[13](v-y) "∃p．\fd{\tt b}{p}  *  \bk{p}{\tt b}  *  {}\\{} \bnode[*]{\smallsize{\tt idx}}{p}{\tt b}{U_{{\tt idx}}}", ribSO(w) "\ditto";
+com(v-y) "p = b->fd;", extend su (a-f);
+ribSO(v) "\mrot{\fd{\tt b}{\tt p}}", ribSO(x) "\mrot{\bk{\tt p}{\tt b}}", ribSO[42](y) "\mrot{\bnode[*]{\smallsize{\tt idx}}{\tt p}{\tt b}{U_{{\tt idx}}}}";
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof{malloc1.tex}
+
+\section{PAGE 2}
+
+\begin{filecontents*}{layoutertemp.tex}
+
+restate[40];
+ribOS(y), ribOS(w);
+jus[12](y-w) "Defn of $(-)^*$ \\ and \emph{bnode}.";
+ribSS[58](y-w) "\mrot{∃F．\frac12(\size{\tt p}{8{\tt idx}})  *  \fd{\tt p}{F} {}\\{}  *  \bk{F}{\tt p}  *   (\emph{bnode}\,\smallsize{\tt idx})^*(F,{\tt b}, {}\\{} U_{{\tt idx}} \uplusminus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w})}", ribOS(b-ah), ribOS(e), ribOS(u), twist(o,n,aq,bb)(aq,o,n,bb);
+eshape su;
+jus(e-w) "Since $U_{{\tt idx}} \uplusminus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w}$ is defined, we can replace $U_{\tt idx}$ with $U_{\tt idx}\uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w}\}$.";
+bshape su (a-f) "∃U_0,\ldots,U_{63}";
+ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w}\}}{t}", ribSO(e) "\ditto", ribSO(u) "\ditto", ribSS[53](y-w) "\mrot{∃F．\frac12(\size{\tt p}{8{\tt idx}}) {}\\{} *  \fd{\tt p}{F}  *  \bk{F}{\tt p} {}\\{} *  \bnode[*]{\smallsize{\tt idx}}{F}{\tt b}{U_{{\tt idx}}}}",
+ribOS(d), ribOS(v), ribOS(x), ribOS(p), extend su (a-n);
+com(d-p) "unlink\_first\_small\_chunk(gm, b, p, idx);";
+ribSO[25](d) "\mrot{\frac12(\size{\tt p}{\underscore})}", ribSO(v) "\mrot{\fd{\tt p}{\underscore}}", ribSO(x) "\mrot{\bk{\tt p}{\underscore}}", ribSO(y-p) "\smallbin{\tt idx}{U_{\tt idx}}";
+twist(u,d,v,at,ax,au,av,x)(d,v,at,ax,au,av,x,u), ribOS[10](u), ribOS(y-p);
+jus(u-p) "Recombine smallbins.";
+ribSO(u-p) "\iterstar[32]{i=0}．\smallbin{i}{U_i}", ribOS(b-ah);
+jus(b-ah) "Defn of \emph{arena}.";
+ribSO(b) "\mrot{\prevfoot{\tt start}{\underscore}}", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v {}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w}\} \uplus t)}", ribSS[26](ae-ah) "\emph{block}^*({\tt start},{\tt top},A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt idx}-1{\sf w}\})", ribOO(k), ribOO(o);
+jus(ae-ah) "Split \emph{block} list.";
+bshape sb (ab-ad) "∃B_1, B_2";
+ribSS(ae) "\mrot{\emph{block}^*{}\\{}({\tt start},{\tt p},B_1)}", ribSS(af-al) "\emph{ublock}({\tt p},{\tt p}+8{\tt idx},{}\\{}\{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt idx}-1{\sf w}\})", ribSO(ag) "\mrot{\block[*]{{\tt p}+8{\tt idx}}{\tt top}{B_2}}", ribSO(ah) "\mrot{B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}", extend sb (am-ad), ribOS(aa), ribOS(z), twist(z,aa)(aa,z), twist[35](u,y,w,f,ba,p,m,k,aq,o) (k,aq,o,m,u,y,w,f,ba,p);
+jus(aa-al) "Extract $\pinuse{\tt p}{1}$.", extend sb (am-m);
+twist(z,ab,ae)(ae,ab,z);
+ribSO(ae) "\mrot{\pinuse{\tt p}{1} \magicwand (\pinuse{\tt start}{1}  *  {}\\{} \emph{block}^*({\tt start},{\tt p},B_1))}", ribSO(z) "\mrot{\pinuse{\tt p}{1}}", ribSO(aa) "\ditto", ribSS(af-al) "\ditto";
+jus(af-al) "Defn of \emph{ublock}";
+ribSO(af) "\mrot{\frac12(\size{\tt p}{\underscore})}", ribSO(ai) "\mrot{\pinuse{{\tt p}+8{\tt idx}}{0}}", ribSO(aj) "\mrot{\cinuse{{\tt p}}{0}}", ribSS[39](ak) "\mrot{\prevfoot{{\tt p}+8{\tt idx}}{8{\tt idx}}}", ribSS[33](al) "\mrot{\iterstar[2{\tt idx}]{i=4}．{\tt p} + i{\sf w}↦\underscore}", twist(ag,ah,ad,d)(d,ag,ah,ad);
+jus[12](ak-al) "Defn of \\ $\prevfoot{}{}$";
+ribSO(ak-al) "\mrot{\iterstar[2{\tt idx}+1]{i=4}．{}\\{} {\tt p} + i{\sf w}↦\underscore}", twist[20](ag,ah,ad,v)(v,ag,ah,ad);
+ribOS(af), ribOS(ak-al), twist[20](ai,aj,ak,al,d,v,ag,ah,ad,at,ax,au,av,x)(d,ai,aj,ak,al,v,at,ax,au,av,x,ag,ah,ad), ribOS(d), ribOS(v), ribOS(x);
+jus(af-d) "Combine.", jus(ak-x) "Defns of $\fd{}{}$ and $\bk{}{}$.";
+ribSO(af-d) "\mrot{\size{\tt p}{\underscore}}", ribSS(ak-x) "\iterstar[2{\tt idx}+1]{i=2}．{\tt p} + i{\sf w}↦\underscore", ribOS(k), ribOS(aq), twist(ag,ah,ad,k,aq)(k,aq,ag,ah,ad);
+jus[12](ak-aq) "Split iteration at $\ceil{{\tt bytes}/{\sf w}}+2$. \\Requires ${\tt bytes}≥0$ and $8{\tt idx}+{\sf w} ≥ {\tt bytes}$.";
+twist(ak,al,v,at,ax,au,av,x)(al,v,at,ax,au,av,x,ak);
+ribSO[42](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}+2]{i=2}．{\tt p} + i{\sf w}↦\underscore}", ribSO(al-x) "\iterstar[2{\tt idx}+1]{i=\ceil{{\tt bytes}/{\sf w}}+2}．{\tt p} + i{\sf w}↦\underscore", ribSO(k) "\ditto", twist (aq,ag,ah)(ag,ah,aq);
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc1.tex]{malloc2.tex}
+
+
+\section{PAGE 3}
+
+\begin{filecontents*}{layoutertemp.tex}
+
+restate[25];
+ribOS(af-d), ribOS(ai), ribOS(aj), ribOS(z);
+com[12](z-aj) "set\_inuse\_and\_pinuse(gm, \\ p, small\_index2size(idx));";
+ribSS(z) "\ditto", ribSO(af-d) "\ditto", ribSO(ai) "\mrot{\pinuse{{\tt p}+8{\tt idx}}{1}}", ribSO(aj) "\mrot{\cinuse{{\tt p}}{1}}", ribOS(ae);
+jus[12](ae-z) "Re-insert \\ $\pinuse{\tt p}{1}$.";
+twist(ae,ab,z)(z,ab,ae);
+ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSO(ae) "\mrot{\emph{block}^*{}\\{}({\tt start},{\tt p},B_1)}", twist[55](ak,k,ag,ah,aq,ad,o)(k,o,ag,ah,ad,ak,aq), ribOS(af-d), ribOS(ai), ribOS(aj), ribOS(al-x), ribOS(k), ribOS(o), ribOO(ak);
+extend sb (ab-ad), jus(af-o) "Defn of \emph{ablock}. Requires $8{\tt idx}≥4{\sf w}$ and $\ceil[{\sf w}]{{\tt bytes}+{\sf w}}≤8{\tt idx}$.";
+ribSS[30](af-o) "\ablock{\tt p}{{\tt p}+8{\tt idx}}{\{{\tt p}+2{\sf w} ↦_{\sf a} \ceil[{\sf w}]{{\tt bytes}}\}}", twist(ak,aq,m,u,y,w,f,ba,p)(u,y,w,f,p,m,ba,ak,aq), ribOO(ak), ribOS(ae), ribOS(ag), ribOS(ah);
+eshape sb;
+jus(ae-ah) "Recombine \emph{block} list.", extend su (a-m);
+ribOS(b), ribOS(aa), ribOS(z), ribSS(ae-ah) "\block[*]{\tt start}{\tt top}{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a} \ceil[{\sf w}]{{\tt bytes}}\}}";
+jus(b-ah) "Defn of \emph{arena}.", extend sv (az-ba);
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}{t}", ribOS(e), ribOS(ay), ribOS(u-p), ribOS(ac), extend st (ao-aq);
+eshape su;
+eshape sv;
+eshape st;
+jus(e-p) "Defn of \emph{state}.";
+ribSS(e-p) "\state{A \uplus \{{\tt p}+2{\sf w}↦\ceil[{\sf w}]{{\tt bytes}}\}}", ribOS(ak);
+com(e-ak) "mem = chunk2mem(p);";
+ribSS(e-p) "\state{A \uplus \{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}", ribSS[43](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore}";
+com(e-ak) "goto postaction;";
+ribSO(e-ak) "\false";
+ccases c2 "\} else if (nb > gm->dvsize) \{";
+restate[60];
+bcases c3 (ao-an) "if (smallbits != 0) \{ /* Use chunk in next nonempty smallbin */";
+
+ribOS(e-w), ribOO(p) "\mrot{{\tt smallbits} {}\\{} ≠ 0}", twist(n,as,ar,ap,aq)(as,ar,ap,aq,n);
+jus(e-w) "Defn of \emph{state}.";
+bshape st (c-bb) "∃t";
+bshape sv (az-ba) "∃v";
+bshape su (a-f) "∃U_0,\ldots,U_{63}";
+ribSO(ac) "\mrot{\topchunk{t}}", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{t}", ribSO(e) "\mrot{\iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}", ribSO(ay) "\mrot{\victim{v}}", ribSO(u-w) "\iterstar[32]{i=0}．\smallbin{i}{U_i}", ribOS(p), ribOS(o), ribOS(k), extend st (c-l);
+twist(p,m,o)(o,m,p);
+com[33](o-as) "binmap\_t leftbits = \\{} (smallbits {<}{<} idx) \\{} \& left\_bits(idx2bit(idx)); \\ binmap\_t leastbit = \\{} least\_bit(leftbits); \\ compute\_bit2idx(leastbit, i);";
+ribSO[23](o) "\mrot{{\tt i}∈[2\upto32)}", ribSO(p) "\mrot{{\tt smallmap}_{[{\tt i}]} {}\\{} = 1}", ribSO(as) "\mrot{{\tt nb}+4{\sf w} ≤ 8{\tt i}}", twist(bb,o,m,p,k,as,ar,ap,aq,n)(o,m,p,k,as,ar,ap,aq,n,bb);
+extend sv (az-bb);
+extend su (a-m);
+ribOS(u-w), ribOS(o);
+jus(u-o) "Split off ${\tt i}^{\rm th}$ smallbin.";
+ribSO(u) "\mrot{\iterstar{i∈[0\upto32)\uplusminus{\tt i}}．{}\\{} \smallbin{i}{U_i}}", ribSS(d-w) "\smallbin{\tt i}{U_{\tt i}}", ribSO(o) "\ditto";
+com(d-w) "b = smallbin\_at(gm, i);", extend su (a-f);
+ribSO(d) "\mrot{{\tt b}={\tt smallbin}+8{\tt i}}", ribSO(v-y) "\bin{\smallsize{\tt i}}{\tt b}{U_{{\tt i}}}", ribSO[45](w) "\mrot{{\tt smallmap}_{[{\tt i}]} = (U_{{\tt i}} ≠ \{\})}", twist(o,m,p,k)(p,m,k,o);
+extend su (a-m);
+twist[8](a)(a);
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc2.tex]{malloc3.tex}
+
+\section{PAGE 4}
+
+\begin{filecontents*}{layoutertemp.tex}
+restate[40];
+
+ribOS(w), ribOS(p);
+jus[12](w-p) "Deduce that ${\tt i}^{\rm th}$ \\ smallbin isn't empty.";
+ribSS[20](w) "\mrot{U_{\tt i} ≠ \{\}}", ribSO(p) "\ditto", ribOS(v-y);
+jus(v-w) "Defn of \emph{bin}.";
+ribSS[12](v-y) "∃p．\fd{\tt b}{p}  *  \bk{p}{\tt b}  *  {}\\{} \bnode[*]{\smallsize{\tt i}}{p}{\tt b}{U_{{\tt i}}}", ribSO(w) "\ditto";
+com(v-y) "p = b->fd;", extend su (a-f);
+ribSO(v) "\mrot{\fd{\tt b}{\tt p}}", ribSO(x) "\mrot{\bk{\tt p}{\tt b}}", ribSS[37](y) "\mrot{\bnode[*]{\smallsize{\tt i}}{\tt p}{\tt b}{U_{{\tt i}}}}", ribOS(w);
+jus[12](y-w) "Defn of $(-)^*$ \\ and \emph{bnode}.";
+ribOS(b-ah), ribOS(e), ribOS(u), ribSS[57](y-w) "\mrot{∃F．\frac12(\size{\tt p}{8{\tt i}})  *  \fd{\tt p}{F} {}\\{}  *  \bk{F}{\tt p}  *   (\emph{bnode}\,\smallsize{\tt i})^*(F,{\tt b}, {}\\{} U_{{\tt i}} \uplusminus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w})}";
+eshape su;
+jus(e-w) "Since $U_{{\tt i}} \uplusminus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w}$ is defined, we can replace $U_{\tt i}$ with $U_{\tt i}\uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w}\}$.";
+bshape su (a-f) "∃U_0,\ldots,U_{63}";
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w}\}}{t}", ribSO(e) "\ditto", ribSO(u) "\ditto", ribSS[53](y-w) "\mrot{∃F．\frac12(\size{\tt p}{8{\tt i}}) {}\\{} *  \fd{\tt p}{F}  *  \bk{F}{\tt p} {}\\{} *  \bnode[*]{\smallsize{\tt i}}{F}{\tt b}{U_{{\tt i}}}}",
+ribOS(d), ribOS(v), ribOS(x), ribOS(p), extend su (a-n);
+jus(b-ah) "Defn of \emph{arena}.", com(d-p) "unlink\_first\_small\_chunk(gm, b, p, i);";
+ribSO(b) "\mrot{\prevfoot{\tt start}{\underscore}}", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v {}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w}\} \uplus t)}", ribSO(ae-ah) "\emph{block}^*({\tt start},{\tt top},A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf u}8{\tt i}-1{\sf w}\})", ribSO[25](d) "\mrot{\frac12(\size{\tt p}{8{\tt i}})}", ribSO(v) "\mrot{\fd{\tt p}{\underscore}}", ribSO(x) "\mrot{\bk{\tt p}{\underscore}}", ribSO(y-p) "\smallbin{\tt i}{U_{\tt i}}";
+twist(u,d,v,at,ax,au,av,x)(d,v,at,ax,au,av,x,u), ribOS[10](u), ribOS(y-p);
+jus(u-p);
+ribSO(u-p) "\iterstar[32]{i=0}．\smallbin{i}{U_i}", ribOS(ae-ah);
+jus(ae-ah) "Split \emph{block} list.";
+bshape sb (ab-ad) "∃B_1, B_2";
+ribSO(ae) "\mrot{\block[*]{\tt start}{\tt p}{B_1}}", ribSO(af-al) "\mrot{\emph{ublock}({\tt p},{\tt p}+8{\tt i},{}\\{}\{{\tt p}+2{\sf w}↦_{\sf u} 8{\tt i}-1{\sf w}\})}", ribSO(ag) "\mrot{\block[*]{{\tt p}+8{\tt i}}{\tt top}{B_2}}", ribSO(ah) "\mrot{B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}";
+extend sb (am-ad);
+ribOS(z), ribOS(aa), ribOS(ae), ribOS(af-al), twist[36](u,y,w,f,ba,p,m,k,o,as,ar,ap,aq) (k,o,as,ar,ap,aq,m,u,y,w,f,ba,p), twist(z,aa)(aa,z);
+jus(aa-al) "Extract $\pinuse{\tt p}{1}$.", extend sb (am-m);
+twist(z,ab,ae)(ae,ab,z);
+ribSO(ae) "\mrot{\pinuse{\tt p}{1} \magicwand (\pinuse{\tt start}{1}  *  {}\\{} \emph{block}^*({\tt start},{\tt p},B_1))}", ribSO(z) "\mrot{\pinuse{\tt p}{1}}", ribSO(aa) "\ditto", ribSS(af-al) "\ditto";
+jus(af-al) "Defn of \emph{ublock}";
+twist(o,as,ar)(ar,as,o), twist(ag,ah,ad,d)(d,ag,ah,ad), ribSO(af) "\mrot{\frac12(\size{\tt p}{8{\tt i}})}", ribSO(ai) "\mrot{\cinuse{{\tt p}}{0}}", ribSO(aj) "\mrot{\pinuse{{\tt p}+8{\tt i}}{0}}", ribSS[34](ak) "\mrot{\prevfoot{{\tt p}+8{\tt i}}{8{\tt i}}}", ribSS(al) "\mrot{\iterstar[2{\tt i}]{i=4}．{\tt p} + i{\sf w}↦\underscore}";
+jus[12](ak-al) "Defn of \\ $\prevfoot{}{}$";
+ribSO(ak-al) "\mrot{\iterstar[2{\tt i}+1]{i=4}．{}\\{} {\tt p} + i{\sf w}↦\underscore}", twist[20](ag,ah,ad,v)(v,ag,ah,ad);
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc3.tex]{malloc4.tex}
+
+
+
+\section{PAGE 5}
+
+\begin{filecontents*}{layoutertemp.tex}
+restate[49];
+twist[45](ai,aj,ak,al,d,v,ag,ah,ad,at,ax,au,av,x,k,ar,as,o,ap,aq)(d,ai,ak,al,v,at,ax,au,av,x,aq,aj,ag,ah,ad,k,ar,as,o,ap), ribOS(af), ribOS(ak-al), ribOS(d), ribOS(v), ribOS(x), ribOS(ar), ribOS(as), ribOS(o);
+jus(af-d) "Combine", jus(ak-x) "Defns of $\fd{}{}$ and $\bk{}{}$.", com[13](ar-ap) "rsize = small\_\\index2size(i) - nb;";
+ribSO(af-d)(af) "\mrot{\size{\tt p}{8{\tt i}}}", ribSS[40](ak-x)(al-k) (* <-- AVOID HAVING TO DO THIS *) "\iterstar[2{\tt i}+1]{i=2}．{\tt p} + i{\sf w}↦\underscore", ribSS(as) "\ditto", ribSO(ap) "\mrot{{\tt rsize} = 8{\tt i} - {\tt nb}}", ribSO(o) "\mrot{{\tt rsize}\partialdiv 8 ∈ [2\upto32)}", twist(d,ai,ak,al,v,at,ax,au,av,x,aq,aj,ag,ah,ad,k,ar,as)(ai,ar,al,v,at,ax,au,av,x,k,as,ak,aq,aj,ag,ah,ad,d), ribSS(ar) "\ditto", ribOS(aq);
+jus(ar-aq) "Split iteration at $\ceil{{\tt bytes}/{\sf w}}+2$ and $\ceil{{\tt nb}/{\sf w}}+1$. \\ Requires ${\tt bytes}≥0$, ${\tt nb}≤8{\tt i}$ and ${\tt nb}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$.", com[13](ah-ap) "r = chunk\_plus\\\_offset(p, nb);";
+ribSO(d) "\mrot{{\tt r} = {\tt p} + {\tt nb}}", ribSO[12](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}+2]{i=2}．{\tt p} + i{\sf w}↦\underscore}", ribSS(ar) "\ditto", ribSO(as) "\ditto", ribSO(al) "\mrot{\iterstar[\ceil{{\tt nb}/{\sf w}}+1]{i=\ceil{{\tt bytes}/{\sf w}}+2}．{\tt p} + i{\sf w}↦\underscore}", ribSO(v-k) "\mrot{\iterstar[2{\tt i}+1]{i=\ceil{{\tt nb}/{\sf w}}+1}．{\tt p} + i{\sf w}↦\underscore}", ribOS(af), ribOS(ai), ribOS(z);
+com(z-ar) "set\_size\_and\\\_pinuse\_of\_inuse\\\_chunk(gm, p, nb);\\\mbox{\rm //Requires $8|{\tt nb}$.}", twist[24](aq,aj,ag,ah,ad,d,o,ap)(ap,aj,ag,ah,ad,d,o,aq);
+ribSS(z) "\ditto", ribSO(ar) "\ditto", ribSO(af) "\mrot{\size{\tt p}{\tt nb}}", ribSO(ai) "\mrot{\cinuse{{\tt p}}{1}}", ribOS(ap), ribOS(d), twist[30](ak,ap,aj,ag,ah,ad,d,o)(ap,d,aj,ag,ah,ad,ak,o), ribOS(ae), ribOS(v-k), ribOS(as);
+jus(v-d) "Split iteration again.", jus[12](ae-z) "Re-insert \\$\pinuse{\tt p}{1}$.";
+twist(ae,ab,z)(z,ab,ae);
+ribSO(v-au) "\mrot{{\tt r}+1{\sf w} ↦\underscore}", ribSO(av) "\mrot{{\tt r}+{\tt rsize}↦\underscore}", ribSO[20](x) "\mrot{\iterstar[{\tt rsize}/{\sf w}]{i=4}．{\tt r} + i{\sf w}↦\underscore}", ribSO(k) "\mrot{{\tt r}+2{\sf w} ↦ \underscore  *  {\tt r}+3{\sf w} ↦ \underscore}", ribSO(as) "\ditto", ribSO(d) "\ditto", ribSO(ap) "\ditto", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSO(ae) "\mrot{\block[*]{\tt start}{\tt p}{B_1}}", twist(ak,o)(o,ak);
+ribOS(v-au), ribOS(av), ribOS(as), ribOS(ap), twist[20](ar,al)(al,ar);
+jus(v-av) "Defns.", jus(as-ap);
+ribSO[20](as) "\mrot{{\tt rsize} ≥ 4{\sf w}}", ribSO(ap) "\ditto", ribOO(ak), ribSO(v) "\mrot{\pinuse{{\tt r}}{\underscore}}", ribSO(at-ax) "\mrot{\size{\tt r}{\underscore}}", ribSO(au) "\mrot{\cinuse{\tt r}{\underscore}}", ribSO(av) "\mrot{\prevfoot{{\tt r}+{\tt rsize}}{\underscore}}";
+ribOS(ap), ribOS(d), ribOS(aj), ribOS(ag), twist[20](k,as,ap,d,aj,ag)(as,ap,d,aj,ag,k);
+jus(ap-ag);
+ribSO(ap) "\ditto", ribSO(d) "\ditto", ribSO(aj) "\mrot{\pinuse{{\tt r}+{\tt rsize}}{0}}", ribSO(ag) "\mrot{\block[*]{{\tt r}+{\tt rsize}}{\tt top}{B_2}}";
+twist[20](x,as,ap)(ap,x,as), ribOS(ap), ribOS(v), ribOS(at-ax), ribOS(au), ribOS(av), ribOS(ar);
+com[13](ar-ap) "set\_size\_and\_pinuse\_of\_free\_chunk\\(r,rsize); \mbox{\rm //Requires $8|{\tt rsize}$}";
+ribSO(ar) "\ditto", ribSO(v) "\mrot{\pinuse{{\tt r}}{1}}", ribSO(at-ax) "\mrot{\size{\tt r}{\tt rsize}}", ribSO(au) "\mrot{\cinuse{{\tt r}}{0}}", ribSO[45](av) "\mrot{\prevfoot{{\tt r}+{\tt rsize}}{\tt rsize}}";
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc4.tex]{malloc5.tex}
+
+
+\section{PAGE 6}
+
+\begin{filecontents*}{layoutertemp.tex}
+restate[18];
+
+ribOS(at-ax);
+jus(at-ax) "Halve {\tt r}";
+ribSO[28](at) "\mrot{\frac12(\size{{\tt r}}{\tt rsize})}", ribSO(ax) "\mrot{\frac12(\size{{\tt r}}{\tt rsize})}", twist(ap,x,as,d)(d,x,as,ap);
+twist[20](ax,au,av,d)(d,au,av,ax), twist(k,ah,ad)(ah,ad,k);
+twist[25](at,d,au,av,ax,x,as,ap,aj,ag,ah,ad,k,o)(d,at,au,av,ap,x,as,aj,ag,ah,ad,ax,k,o), ribOS(af), ribOS(ai), ribOS(aj), ribOS(al), ribOS(v), ribOS(d), ribOS(ar), ribOS(as), ribOS(at), ribOS(au), ribOS(av), ribOS(x), ribOO(ak);
+extend sb (ab-ad), jus(af-d) "Defn of \emph{ablock}.", jus(at-aj) "Defn of \emph{ublock}.";
+ribSS(af-d) "\ablock{\tt p}{\tt r}{\{{\tt p}+2{\sf w} ↦_{\sf a} \ceil[{\sf w}]{{\tt bytes}}\}}", ribSS(at-aj) "\emph{ublock}({\tt r},{\tt r}+{\tt rsize}, \\ \{{\tt r}+2{\sf w} ↦_{\sf u} {\tt rsize}-1{\sf w}\})", twist[40](ax,k,o,ak,aq,m,u,y,w,f,ba,p)(u,y,w,f,p,m,ba,ax,k,o,ak,aq), ribOO(ak), ribOO(ax), ribOS(ae), ribOS(ag), ribOS(ah);
+eshape sb;
+jus(ae-ah) "Recombine \emph{block} list.", extend su (a-m);
+ribOS(b), ribOS(aa), ribOS(z), ribSS(ae-ah) "\block[*]{\tt start}{\tt top}{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}},{\tt r}+2{\sf w} ↦_{\sf u} {\tt rsize}-1{\sf w}\}}";
+jus(b-ah) "Defn of \emph{arena}.", extend sv (az-ba);
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}},{\tt r}+2{\sf w} ↦_{\sf u} {\tt rsize}-1{\sf w}\}}{t}", ribOS(e), ribOS(ay), ribOS(u-p), ribOS(ax), ribOS(k), ribOS(o), ribOS(ac);
+eshape su;
+eshape sv;
+com(e-o) "replace\_dv(gm, r, rsize);";
+bshape sv (az-ba) "∃v";
+bshape su (a-m) "∃U_0,\dots,U_{63}";
+ribSS(e) "\ditto", ribSS(ay) "\ditto", ribSS(ac) "\ditto", ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}{t}", ribSS(u-p) "\ditto", extend st (c-ax);
+eshape su;
+eshape sv;
+eshape st;
+jus(e-p) "Defn of \emph{state}.";
+ribSS(e-p) "\state{A \uplus \{{\tt p}+2{\sf w}↦\ceil[{\sf w}]{{\tt bytes}}\}}", ribOS(ak);
+com(e-ak) "mem = chunk2mem(p);";
+ribSS(e-p) "\state{A \uplus \{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}", ribSS[45](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore}";
+com(e-ak) "goto postaction;";
+ribSO(e-ak) "\false";
+
+ccases c3 "else if (gm->treemap != 0) \{";
+
+restate[40];
+ribOS(p), ribOS(o), ribOS(k);
+jus(p-k) "Kill ribbons.";
+ribOS(e-w), ribOS(ar);
+twist(e,ay,ac,b,am)(am,e,ay,ac,b);
+com(e-ar) "mem = tmalloc\_small(gm, nb)";
+ribSO(e-w) "(\state{A}  *  {\tt mem}=0) ∨ (\state{A\uplus\{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}  *  {\tt mem}≠0  * \iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore)", ribSO(ar) "\ditto";
+bcases c4 (az-ap) "if (mem != 0) \{";
+ribOS(e-w) "\state{A\uplus\{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}  *  {\tt mem}≠0  *  \iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore", ribOS(ar);
+jus(e-p), jus(ar) "Kill.";
+ribSS(e-w) "\state{A\uplus\{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}", ribSS[50](p) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore}";
+com(e-p) "goto postaction;";
+ribSO(e-p) "\false";
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc5.tex]{malloc6.tex}
+
+
+\section{PAGE 7}
+
+\begin{filecontents*}{layoutertemp.tex}
+
+ccases c4;
+ribOO(e-w) "\state{A}";
+ecases c4;
+twist[8](a)(a);
+ecases c3;
+restate[60];
+ecases c2;
+restate[60];
+ccases c1 "else if (bytes {>}= MAX\_REQUEST)";
+restate[15];
+com(p-ar) "nb = MAX\_SIZE\_T;";
+ribSO[25](ar) "\mrot{{\tt nb} = 2^{32}-8}";
+ccases c1 "else \{";
+ribOS[26](aq) "\mrot{{\tt bytes}≥256}";
+com(p-aq) "nb = pad\_request(bytes);";
+ribSO[60](ar) "\mrot{{\tt nb}≥16 ∧ {\tt nb}≥ \ceil[{\sf w}]{{\tt bytes}+{\sf w}} ∧ 8|{\tt nb} }", ribSO(aq) "\mrot{{\tt bytes}≥0}";
+bcases c2 (q-r) "if (gm->treemap != 0) \{";
+ribOS(e-w), ribOS(ar);
+com(e-ar) "mem = tmalloc\_small(gm, nb)";
+ribSO(e-w) "(\state{A}  *  {\tt mem}=0) ∨ (\state{A\uplus\{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}  *  {\tt mem}≠0  *  \iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore)";
+bcases c3 (ao-ap) "if (mem != 0) \{";
+ribOS(e-w) "\state{A\uplus\{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}  *  {\tt mem}≠0  *  \iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore";
+jus(e-ar);
+ribSS[45](e-w) "\state{A\uplus\{{\tt mem}↦\ceil[{\sf w}]{{\tt bytes}}\}}", ribSS(ar) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore}";
+com(e-ar) "goto postaction;";
+twist[8](a)(a);
+ccases c3;
+ribOO(e-w) "\state{A}";
+ecases c3 "\}";
+twist[8](a)(a);
+ccases c2;
+twist[8](a)(a);
+ecases c2 "\}";
+ribOO[60](ar) "\mrot{{\tt nb}≥16 ∧ {\tt nb}≥ \ceil[{\sf w}]{{\tt bytes}+{\sf w}} ∧ 8|{\tt nb} }";
+ecases c1 "\}";
+
+ribOO[75](ar) "\mrot{{\tt nb}= 2^{32}-8 ∨ ({\tt nb}≥16 ∧ {\tt nb}≥ \ceil[{\sf w}]{{\tt bytes}+{\sf w}} ∧ 8|{\tt nb}) }";
+
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc6.tex]{malloc7.tex}
+
+\section{PAGE 8}
+
+\begin{filecontents*}{layoutertemp.tex}
+
+restate[75];
+twist(bb,p,m,o,k,n,as,ar,ap,aq,l,an,r)(n,p,m,o,k,as,r,ar,ap,aq,bb,l,an), twist(q,ao,c,az,a)(ao,c,a,q,az);
+bcases c1 (g-h) "if (nb {<}= gm-{>}dvsize) \{";
+ribOS(e-w), ribSO(k) "\mrot{{\tt nb}≤{\tt dvsize}}";
+jus(e-w) "Defn of \emph{state}.";
+bshape st (ao-n) "∃t";
+bshape su (a-ba) "∃U_0,\ldots,U_{63}";
+bshape sv (az-f) "∃v";
+ribSO(ac) "\mrot{\topchunk{t}}", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{t}", ribSO(e) "\mrot{\iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}", ribSO(u-w) "\victim{v}", ribSO(ay) "\mrot{\iterstar[32]{i=0}．\smallbin{i}{U_i}}";
+extend st (ao-an);
+extend su (a-bb);
+extend sv (az-ap);
+ribOS(u-w), ribOS(ar), ribOS(k);
+jus(u-ar) "Defn of \emph{victim}.";
+ribOS(b-ah), ribSO(u) "\mrot{\fd{\tt dv}{\underscore}}", ribSO(d) "\mrot{\bk{\tt dv}{\underscore}}", ribSO[33](v) "\mrot{\frac12(\size{\tt dv}{\underscore})}", ribSS(at-w) "v=\{{\tt dv}+2{\sf w}↦_{\sf u} {\tt dvsize}-1{\sf w}\}", ribSO(ar) "\mrot{{\tt nb}=\ceil[8]{{\tt bytes}+{\sf w}}}", ribSO(k) "\ditto", ribSO(o) "\mrot{{\tt dvsize}\partialdiv 8 ∈ (0\upto32)}";
+eshape sv;
+jus(b-w) "Witness $v$ at $\{{\tt dv}+2{\sf w}↦_{\sf u} {\tt dvsize}-1{\sf w}\}$.";
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{{\tt dv}+2{\sf w}↦_{\sf u} {\tt dvsize}-1{\sf w}\}}{t}",ribOS(d), ribOS(v);
+com(b-v) "mchunkptr p = gm->dv;", com(w-as) "size\_t rsize = gm->dvsize - nb;";
+ribSO(as) "\mrot{{\tt rsize}={\tt dvsize}-{\tt nb}}", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{{\tt p}+2{\sf w}↦_{\sf u} {\tt dvsize}-1{\sf w}\}}{t}", ribSO(u) "\mrot{\fd{\tt p}{\underscore}}", ribSO(d) "\mrot{\bk{\tt p}{\underscore}}", ribSO[20](v) "\mrot{\frac12(\size{\tt p}{\underscore})}";
+ribOO(d)(x), ribOO(v)(d), ribOO(u)(v), (* <-- order is important here *) twist[20](u,d,v,at,ax,au,av,x)(d,v,at,ax,au,av,x,u), ribOS(b-ah);
+jus(b-ah) "Defn of \emph{arena}.";
+ribSO(b) "\mrot{\prevfoot{\tt start}{\underscore}}", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}{\tt dvsize}-1{\sf w}\} \uplus t)}", ribSS(ae-ah) "\emph{block}^*({\tt start},{\tt top},A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}{\tt dvsize}-1{\sf w}\})", twist[36](u,y,w,f,ba,n,p,m,o,k,as,r,ar,ap,aq) (o,k,as,ar,ap,aq,m,u,y,w,f,ba,p,n,r);
+jus(ae-ah) "Split \emph{block} list.";
+bshape sb (ab-ad) "∃B_1, B_2";
+ribSO(ae) "\mrot{\block[*]{\tt start}{\tt p}{B_1}}", ribSO(af-al) "\mrot{\emph{ublock}({\tt p},{\tt p}+{\tt dvsize},{}\\{}\{{\tt p}+2{\sf w}↦_{\sf u} {\tt dvsize}-1{\sf w}\})}", ribSO(ag) "\mrot{\block[*]{{\tt p}+{\tt dvsize}}{\tt top}{B_2}}", ribSO[55](ah) "\mrot{B_1 \uplus B_2 = A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u}}", twist(o,k,as,ar)(k,ar,as,o);
+extend sb (am-ad);
+ribOS(aa), ribOS(af-al), ribOS(z), ribOS(ae);
+jus(z-al) "Extract $\pinuse{\tt p}{1}$.", extend sb (am-m);
+ribSO(ae) "\mrot{\pinuse{\tt p}{1} \magicwand (\pinuse{\tt start}{1}  *  {}\\{} \emph{block}^*({\tt start},{\tt p},B_1))}", ribSO[20](z) "\mrot{\pinuse{\tt p}{1}}", ribSO(aa) "\ditto", ribSS(af-al) "\ditto", twist(ag,ah,ad,d)(d,ag,ah,ad);
+jus(af-al) "Defn of \emph{ublock}";
+ribSO(af) "\mrot{\frac12(\size{\tt p}{\underscore})}", ribSO(ai) "\mrot{\cinuse{{\tt p}}{0}}", ribSO(aj) "\mrot{\pinuse{{\tt p}+{\tt dvsize}}{0}}", ribSS[59](ak) "\mrot{\prevfoot{{\tt p}+{\tt dvsize}}{{\tt dvsize}}}", ribSS[33](al) "\mrot{\iterstar[{\tt dvsize}/{\sf w}]{i=4}．{\tt p} + i{\sf w}↦\underscore}";
+jus[12](ak-al) "Defn of \\ $\prevfoot{}{}$";
+ribSO[24](ak-al) "\mrot{\iterstar[{\tt dvsize}/{\sf w}+1]{i=4}．{}\\{} {\tt p} + i{\sf w}↦\underscore}", twist(ag,ah,ad,v)(v,ag,ah,ad), twist(z,aa,ab,ae)(aa,ae,ab,z);
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc7.tex]{malloc8.tex}
+
+\section{PAGE 9}
+\begin{filecontents*}{layoutertemp.tex}
+restate[40];
+
+twist[25](ai,aj,ak,al,d,v,ag,ah,ad,at,ax,au,av,x)(d,ai,aj,ak,al,v,at,ax,au,av,x,ag,ah,ad);
+bcases c2 (q-r) "if (rsize >= MIN\_CHUNK\_SIZE) \{";
+ribOS(k), ribSO(ap) "\mrot{4{\sf w}≤{\tt rsize}}";
+jus(k) "Kill.";
+ribOS(aa), ribOS(aj), ribOS(ak-al), ribOS(ag), ribOS(as), ribOS(o), ribOS(ap);
+jus(aa-ap) "Sub ${\tt nb}+{\tt rsize}$ for {\tt dvsize}.";
+ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}{\tt nb}+{\tt rsize}-1{\sf w}\}\uplus t)}", ribSO(aj) "\mrot{\pinuse{{\tt p}+{\tt nb}+{\tt rsize}}{0}}", ribSS[50](ak-al) "\mrot{\iterstar[({\tt nb}+{\tt rsize})/{\sf w}+1]{i=4}．{}\\{} {\tt p} + i{\sf w}↦\underscore}", ribSO(ag) "\mrot{\block[*]{{\tt p}+{\tt nb}+{\tt rsize}}{\tt top}{B_2}}", ribOS(af), ribOS(d), ribOS(v), ribOS(x), ribSO(ap)(as) "\ditto", ribSO(o) "\mrot{{\tt rsize}\partialdiv 8 ∈ (0\upto32)}", twist(ah,ad,k,ar,as)(ar,ah,as,k,ad);
+jus(af-d) "Combine", jus(ak-x) "Defns of $\fd{}{}$ and $\bk{}{}$.";
+ribSO(af-d) "\mrot{\size{\tt p}{\underscore}}", ribSS(ak-x)(al-k)  (*<-- AVOID HAVING TO DO THIS*)  "\iterstar[({\tt nb}+{\tt rsize})/{\sf w}+1]{i=2}．{\tt p} + i{\sf w}↦\underscore", ribOS(as), twist[40](aj,ak,al,v,at,ax,au,av,x,ag,ar,ah,as,k,ad,o)(ar,al,v,at,ax,au,av,x,k,as,ak,ah,o,aj,ag,ad), ribOS(ar), ribOS(aj), ribOS(ag), ribOS(aq)(ak);
+jus[12](ar-ak) "Split iteration at $\ceil{{\tt bytes}/{\sf w}}+2$ and $\ceil{{\tt nb}/{\sf w}}+1$. {}\\{} Requires ${\tt bytes}≥0$, ${\tt rsize}≥0$, and ${\tt nb}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$.", com(aj-aq) "r = gm->dv = chunk\_\\{} plus\_offset(p, nb);", com(u-w) "dvsize = rsize;";
+ribSO(aj) "\mrot{\pinuse{{\tt r}+{\tt rsize}}{0}}", ribSO(ag) "\mrot{\block[*]{{\tt r}+{\tt rsize}}{\tt top}{B_2}}", ribSO(ap) "\mrot{{\tt r} = {\tt p} + {\tt nb}}", ribSO(aq) "\mrot{{\tt dv}={\tt r}}", ribSO[20](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}+2]{i=2}．{\tt p} + i{\sf w}↦\underscore}", ribSS(ar) "\ditto", ribSO(as) "\ditto", ribSO(al) "\mrot{\iterstar[\ceil{{\tt nb}/{\sf w}}+1]{i=\ceil{{\tt bytes}/{\sf w}}+2}．{\tt p} + i{\sf w}↦\underscore}", ribSO(v-k) "\mrot{\iterstar[({\tt nb}+{\tt rsize})/{\sf w}+1]{i=\ceil{{\tt nb}/{\sf w}}+1}．{\tt p} + i{\sf w}↦\underscore}", ribOS(af-d), ribOS(ai), ribOS(z), ribSO(u-w) "{\tt dvsize}={\tt rsize}";
+com[18](z-ar) "set\_size\_and\_pinuse\_of\\{}\_inuse\_chunk(gm, p, nb); {}\\\mbox{\rm //Requires $8|{\tt nb}$}";
+ribSS(z) "\ditto", ribSO(ar) "\ditto", ribSO(af-d) "\mrot{\size{\tt p}{\tt nb}}", ribSO(ai) "\mrot{\cinuse{{\tt p}}{1}}", ribOS(ap), twist[30](ak,ah,o,aj,ag,ad,ap)(ap,ah,o,aj,ag,ad,ak), ribOS(ae), ribOS(v-k), ribOS(as);
+jus[12](v-ap) "Split iteration again. {}\\{} Requires ${\tt r}={\tt p}+{\tt nb}$ and ${\tt rsize}≥4{\sf w}$.", jus[12](ae-z) "Re-insert {}\\{} $\pinuse{\tt p}{1}$.";
+twist(ae,ab,z)(z,ab,ae);
+ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSO(ae) "\mrot{\block[*]{\tt start}{\tt p}{B_1}}", ribSS(v-au) "\mrot{{\tt r}+1{\sf w} ↦\underscore}", ribSS(av) "\mrot{{\tt r}+{\tt rsize}↦\underscore}", ribSO(x) "\mrot{\iterstar[{\tt rsize}/{\sf w}]{i=4}．{\tt r} + i{\sf w}↦\underscore}", ribSO[30](k) "\mrot{{\tt r}+2{\sf w} ↦ \underscore  *  {\tt r}+3{\sf w} ↦ \underscore}", ribSO(as) "\ditto", ribSO(ap) "\ditto",
+twist(ak,aq)(aq,ak), twist(ar,al)(al,ar);
+jus(v-av) "Defns.";
+ribSS(v) "\mrot{\pinuse{{\tt r}}{\underscore}}", ribSS(at-ax) "\mrot{\size{\tt r}{\underscore}}", ribSS(au) "\mrot{\cinuse{\tt r}{\underscore}}", ribSS(av) "\mrot{\prevfoot{{\tt r}+{\tt rsize}}{\underscore}}", twist[38](x,k,as,ap,ah,o)(o,x,as,ap,ah,k), ribOS(o), ribOS(ar);
+com[18](ar-o) "set\_size\_and\_pinuse\_of\\\_free\_chunk(r, rsize);\\\mbox{\rm // Requires $8|{\tt rsize}$.}";
+ribSO(ar) "\ditto", ribSO(o) "\ditto", ribSO(v) "\mrot{\pinuse{{\tt r}}{1}}", ribSO(at-ax) "\mrot{\size{\tt r}{\tt rsize}}", ribSO(au) "\mrot{\cinuse{{\tt r}}{0}}", ribSO[40](av) "\mrot{\prevfoot{{\tt r}+{\tt rsize}}{\tt rsize}}", twist(o,x,as,ap)(ap,x,as,o);
+
+dumpstate;
+\end{filecontents*}
+
+\makeribbonproof[malloc8.tex]{malloc9.tex}
+
+
+\section{PAGE 10}
+\begin{filecontents*}{layoutertemp.tex}
+
+restate[20];
+
+ribOS(at-ax);
+jus(at-ax) "Halve {\tt r}";
+ribSO[35](at) "\mrot{\frac12(\size{{\tt r}}{\tt rsize})}", ribSO(ax) "\mrot{\frac12(\size{{\tt r}}{\tt rsize})}", twist(o,ah,k,aj,ag)(aj,o,ag,ah,k);
+twist[20](ax,au,av,ap,x)(ap,au,av,x,ax);
+twist[30](at,ap,au,av,x,ax,as,aj,o,ag,ah,k,ad)(ap,at,au,av,x,as,aj,ag,ah,ad,ax,o,k), ribOS(af-d), ribOS(ai), ribOS(aj), ribOS(al), ribOS(v), ribOS(ap), ribOS(ar), ribOS(as), ribOS(at), ribOS(au), ribOS(av), ribOS(x), ribOO(ak);
+extend sb (ab-ad), jus[12](af-ap) "Defn of \emph{ablock}. Requires ${\tt r}={\tt p}+{\tt nb}$, {}\\{} ${\tt nb}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$, and ${\tt nb}≥4{\sf w}$.", jus(at-aj) "Defn of \emph{ublock}. Requires ${\tt rsize}≥4{\sf w}$.";
+ribSS(af-ap) "\ablock{\tt p}{\tt r}{\{{\tt p}+2{\sf w} ↦_{\sf a} \ceil[{\sf w}]{{\tt bytes}}\}}", ribSS(at-aj) "\emph{ublock}({\tt r},{\tt r}+{\tt rsize}, \\ \{{\tt r}+2{\sf w} ↦_{\sf u} {\tt rsize}-1{\sf w}\})", twist[20](ak,m,u,y,w,f,ba)(u,y,w,m,ba,ak,f), ribOO(ak), ribOO(ax), ribOS(ae), ribOS(ag), ribOS(ah);
+eshape sb;
+jus(ae-ah) "Recombine \emph{block} list.";
+ribOS(b), ribOS(aa), ribOS(z), ribSS(ae-ah) "\block[*]{\tt start}{\tt top}{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}},{\tt r}+2{\sf w} ↦_{\sf u} {\tt rsize}-1{\sf w}\}}", ribOS(ax), ribOS(k), ribOS(o), ribOS(aq), ribOS(u-w);
+jus(b-ah) "Defn of \emph{arena}.", jus(ax-w) "Defn of \emph{victim}.";
+ribOS(ac), ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}},{\tt r}+2{\sf w} ↦_{\sf u} {\tt rsize}-1{\sf w}\}}{t}", ribOS(e), ribOS(ay), ribSS(ax-w) "\victim{\{{\tt r}+2{\sf w}↦_{\sf u}{\tt rsize}-1{\sf w}\}}";
+jus(e-w) "Introduce $v$.";
+bshape sv (az-ba) "∃v";
+ribSO(e) "\ditto", ribSO(ay) "\ditto", ribSO(ac) "\ditto", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}{t}", ribSO(ax-w) "\victim{v}";
+
+ccases c2 "\} else \{";
+ribOS(as);
+jus(as) "Kill.";
+ribOS(aa), ribOS(aj), ribOS(ak-al), ribOS(ag), ribOS(k), ribOS(o);
+com(aa-o) "size\_t dvs = gm->dvsize;";
+ribSO(k) "\mrot{{\tt nb}≤{\tt dvs}}", ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} {}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}{\tt dvs}-1{\sf w}\}\uplus t)}", ribSO(aj) "\mrot{\pinuse{{\tt p}+{\tt dvs}}{0}}", ribSS[40](ak-al) "\mrot{\iterstar[{\tt dvs}/{\sf w}+1]{i=4}．{}\\{} {\tt p} + i{\sf w}↦\underscore}", ribSO(ag) "\mrot{\block[*]{{\tt p}+{\tt dvs}}{\tt top}{B_2}}", ribOS(af), ribOS(d), ribOS(v), ribOS(x), ribSO(o) "\mrot{{\tt dvs}\partialdiv 8 ∈ (0\upto32)}";
+jus(af-d) "Combine.", jus(ak-x) "Defns of $\fd{}{}$ and $\bk{}{}$.";
+ribSO(af-d) "\mrot{\size{\tt p}{\underscore}}", ribSS(ak-x) "\iterstar[{\tt dvs}/{\sf w}+1]{i=2}．{\tt p} + i{\sf w}↦\underscore", ribOS(k), ribOS(ar), ribOS(aq), twist[25](ag,ah,ad,k,ar,as,o,ap,aq)(k,ar,aq,ag,ah,ad,o,as,ap);
+jus[12](ak-aq) "Split iteration at $\ceil{{\tt bytes}/{\sf w}}+2$. Requires {}\\{} ${\tt bytes}≥0$, ${\tt nb}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$ and ${\tt dvs}≥{\tt nb}$.", com(u-w) "gm->dvsize = 0;\\gm->dv = 0;";
+ribSO[45](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}+2]{i=2}．{\tt p} + i{\sf w}↦\underscore}", ribSO(al-x) "\mrot{\iterstar[{\tt dvs}/{\sf w}+1]{i=\ceil{{\tt bytes}/{\sf w}}+2}．{\tt p} + i{\sf w}↦\underscore}", ribSO(k) "\ditto", ribSO(ar) "\ditto", ribSO(u) "\mrot{{\tt dvsize}=0}", twist(aq,ag,ah,ad,o)(o,ag,ah,aq,ad);
+
+
+
+dumpstate;
+
+\end{filecontents*}
+\makeribbonproof[malloc9.tex]{malloc10.tex}
+
+\section{Page 11}
+
+\begin{filecontents*}{layoutertemp.tex}
+
+restate[45];
+
+ribOS(z), ribOS(af-d), ribOS(ai), ribOS(aj), ribOS(o), twist[25](ak,al,v,at,ax,au,av,x,k,ar,o)(o,al,v,at,ax,au,av,x,k,ar,ak);
+com[12](z-o) "set\_inuse\_and\_pinuse(gm, \\ p, dvs); \mbox{\rm Requires $8|{\tt dvs}$.}";
+ribSS(z) "\ditto", ribSO(af-d) "\mrot{\size{\tt p}{\tt dvs}}", ribSO(aj) "\mrot{\pinuse{{\tt p}+{\tt dvs}}{1}}", ribSO(ai) "\mrot{\cinuse{{\tt p}}{1}}", ribSO(o) "\ditto", ribOS(ae);
+jus[12](ae-z) "Re-insert {}\\{} $\pinuse{\tt p}{1}$.";
+twist(ae,ab,z)(z,ab,ae);
+ribSO[30](ae) "\mrot{\emph{block}^*{}\\{}({\tt start},{\tt p},B_1)}", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribOO(ak), twist(ak,ag,ah,aq,ad)(ag,ah,ad,ak,aq), ribOS(af-d), ribOS(ai), ribOS(aj), ribOS(al-x), ribOS(k), ribOS(o), ribOS(ar), ribOO(ak);
+extend sb (ab-ad), jus(af-ar) "Defn of \emph{ablock}. Requires ${\tt dvs}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$ and ${\tt dvs}≥4{\sf w}$.";
+ribSS[15](af-ar) "\ablock{\tt p}{{\tt p}+{\tt dvs}}{\{{\tt p}+2{\sf w} ↦_{\sf a} \ceil[{\sf w}]{{\tt bytes}}\}}", twist(ak,aq,as,ap,m,u,y,w,f,ba,p,n)(w,f,p,n,u,m,ba,ak,y,aq,as,ap), ribOO(ak), ribOS(ae), ribOS(ag), ribOS(ah);
+eshape sb;
+jus(ae-ah) "Recombine \emph{block} list.";
+ribOS(b), ribOS(aa), ribOS(z), ribSS(ae-ah) "\block[*]{\tt start}{\tt top}{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a} \ceil[{\sf w}]{{\tt bytes}}\}}";
+jus(b-ah) "Defn of \emph{arena}.", jus(w-p) "Choose $v=\{\}$";
+bshape sv (ad-n) "∃v";
+ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}{t}", ribSO(w-p) "v=\{\}";
+extend sv (az-m);
+ribOS(b-ah), ribOS(w-p);
+jus(b-p);
+ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}{t}", ribSS(w-p) "\ditto", ribOS(u);
+jus(w-u) "Defn of \emph{victim}.";
+ribSO(w-u) "\victim{v}";
+ecases c2;
+ribOS(ac), ribOS(b-ah), ribOS(e), ribOS(ay), ribOS(w-u), extend su (a-ba);
+eshape sv;
+eshape su;
+eshape st;
+jus(e-u) "Defn of \emph{state}.";
+ribSS(e-w) "\state{A\uplus\{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}", ribOS(ak);
+com(e-ak) "mem = chunk2mem(p);";
+ribSS(e-w) "\state{A\uplus\{{\tt mem}↦_{\sf a}\ceil[{\sf w}]{{\tt bytes}}\}}", ribSS[46](ak) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}]{i=0}．{\tt mem} + i{\sf w}↦\underscore}";
+com(e-ak) "goto postaction;";
+twist[8](a)(a);
+ccases c1 "\} else if (nb < gm->topsize) \{"; 
+
+dumpstate;
+
+\end{filecontents*}
+\makeribbonproof[malloc10.tex]{malloc11.tex}
+
+
+\section{Page 12}
+
+\begin{filecontents*}{layoutertemp.tex}
+
+(*\section{*)pendown 1; printcols 0;(*}*)
+
+restate[0];
+ribOS[20](e-w), ribSO(k) "\mrot{{\tt nb}<{\tt topsize}}";
+jus(e-w) "Defn of \emph{state}.";
+bshape st (ao-n) "∃t";
+bshape su (a-ba) "∃U_0,\ldots,U_{63}";
+bshape sv (az-f) "∃v";
+ribSO(ac) "\mrot{\victim{v}}", ribSO(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{t}", ribSO(e) "\mrot{\iterstar[32]{i=0}．\treebin{i}{U_{i+32}}}", ribSO(u-w) "\topchunk{t}", ribSO(ay) "\mrot{\iterstar[32]{i=0}．\smallbin{i}{U_i}}";
+extend st (ao-an);
+extend su (a-l);
+extend sv (az-bb);
+ribOS(u-w), ribOS(ar), ribOS(k);
+jus(u-ar) "Defn of \emph{topchunk}.";
+twist(u,d,v,at,ax,au,av,x,y)(au,av,d,v,at,y,ax,u,x);
+ribOS(b-ah), ribSO(au) "\mrot{\cinuse{\tt top}{0}}", ribSO[43](d-u) "\iterstar[{\tt topsize}\partialdiv{\sf w}]{i=2}．{\tt top}+i{\sf w}↦\underscore", ribSO(av) "\mrot{\size{\tt top}{\tt topsize}}", ribSS(x-w) "\mrot{t=\{{\tt top}+2{\sf w}↦_{\sf u} \\ {\tt topsize}-1{\sf w}\}}", ribSO(ar) "\mrot{{\tt nb}=\ceil[8]{{\tt bytes}+{\sf w}}}", ribSO(k) "\ditto", ribSO(o) "\mrot{{\tt topsize}\partialdiv 8 ∈ [0\upto2^{29}-8]}";
+eshape st;
+jus(b-ah) "Witness $t$ at $\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\}$.";
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\}}", ribOS(d-u), ribOS(av), ribOS(o), ribOS(k), ribOS(ar);
+com(b-ar) "size\_t rsize = gm->topsize -= nb;";
+ribSS(b-ah) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v}{\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}+{\tt nb}-1{\sf w}\}}", ribSO(d-u) "\iterstar[({\tt topsize}+{\tt nb})\partialdiv{\sf w}]{i=2}．{\tt top}+i{\sf w}↦\underscore", ribSO(av) "\mrot{\size{\tt top}{{\tt topsize}+{\tt nb}}}", ribSO(o) "\mrot{{\tt topsize}\partialdiv 8 ∈ (0\upto2^{29}-8]}", ribSO(as) "\mrot{{\tt topsize}={\tt rsize}}", ribSO(ar) "\ditto";
+jus(b-ah) "Defn of \emph{arena}.";
+twist(z,aa)(aa,z);
+ribSS[63](aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v{}\\{} \uplus \{{\tt top}+2{\sf w}↦_{\sf u}{\tt topsize}+{\tt nb}-1{\sf w}\})}", ribSS(ae-ah) "\emph{block}^*({\tt start},{\tt top}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v)", ribSO(b) "\mrot{\prevfoot{\tt start}{\underscore}}", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribOS(d-u), ribOS(av), ribOS(au);
+com(aa-u) "mchunkptr p = gm->top;";
+ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v{}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf u}{\tt topsize}+{\tt nb}-1{\sf w}\})}", ribSO(ae-ah) "\emph{block}^*({\tt start},{\tt p}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v)", ribSS(d-u) "\iterstar[({\tt topsize}+{\tt nb})\partialdiv{\sf w}]{i=2}．{\tt p}+i{\sf w}↦\underscore", ribSO(au) "\mrot{\cinuse{\tt p}{0}}", ribSO(av)  "\mrot{\size{\tt p}{{\tt topsize}+{\tt nb}}}";
+jus[24](d-u) "Split iteration at $\ceil{{\tt bytes}/{\sf w}}+2$ \\ and $\ceil{{\tt nb}/{\sf w}}+1$. Requires \\ ${\tt bytes}≥0$, ${\tt topsize}≥{\sf w}$, \\ and ${\tt nb}≥\ceil[{\sf w}]{{\tt bytes}+{\sf w}}$.";
+ribSO(u) "\mrot{\iterstar[\ceil{{\tt bytes}/{\sf w}}+2]{i=2}．{\tt p}+i{\sf w}↦\underscore}", ribSO(d) "\mrot{\iterstar[\ceil{{\tt nb}/{\sf w}}+1]{i=\ceil{{\tt bytes}/{\sf w}}+2}．{\tt p}+i{\sf w}↦\underscore}", ribSS[17](v-ax) "\iterstar[({\tt topsize}+{\tt nb})\partialdiv{\sf w}]{i=\ceil{{\tt nb}/{\sf w}}+1}．{}\\{} {\tt p}+i{\sf w}↦\underscore";
+jus[12](v-ax) "Split again. Requires \\ ${\tt topsize}≥2{\sf w}$.";
+ribSO(v-y) "\mrot{{\tt p}+{\tt nb}+1{\sf w}↦\underscore}", ribSO[45](ax) "\mrot{\iterstar[{\tt topsize}\partialdiv{\sf w}]{i=2}．{\tt p}+{\tt nb}+i{\sf w}↦\underscore}", twist(u,x,w,f,ba,n,p,m,o,k,as,r,ar)(k,ar,x,w,f,ba,n,p,m,o,as,u,r);
+twist(ax,k)(k,ax), ribOS(v-y), ribOS(ax);
+com[12](v-ax) "mchunkptr r = gm->top =\\chunk\_plus\_offset(p, nb);";
+ribSS(v-y) "{\tt top}+1{\sf w}↦\underscore", ribSO(ax) "\mrot{\iterstar[{\tt topsize}\partialdiv{\sf w}]{i=2}．{\tt top}+i{\sf w}↦\underscore}", ribSS[38](k) "\mrot{{\tt top} = {\tt r} = {\tt p}+{\tt nb}}", ribOS(z), ribOS(aa), ribOS(ae-ah);
+jus(aa-ah) "Extract $\pinuse{\tt p}{1}$.", com[12](au-k) "r->head = rsize | PINUSE\_BIT; \\ \mbox{\rm//Requires $8|{\tt rsize}$.}";
+twist(z,ab,ae,af,ai,aj,ak,al,ag,ah)(ae,af,ai,aj,ak,al,ag,ah,ab,z);
+ribSO(k) "\mrot{{\tt top}={\tt p}+{\tt nb}}", ribSO(aa) "\ditto", ribSO(ae-ah) "\pinuse{\tt p}{1} \magicwand (\pinuse{\tt start}{1}  *  {}\\{} \emph{block}^*({\tt start},{\tt p}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v))", ribSO[25](z) "\mrot{\pinuse{\tt p}{1}}", ribSO(y) "\mrot{\size{\tt top}{\tt rsize}}", ribSO(at) "\mrot{\cinuse{\tt top}{0}}", ribSO(v) "\mrot{\pinuse{\tt top}{1}}";
+ribOS(aa) "\ditto", ribOS[25](z), ribOS(y), ribOS(at), ribOS(au), ribOS(av), ribOS(o), ribOS(ax), twist(at,y,k,ax,ar)(k,ar,at,y,ax), ribOS(as);
+jus(aa) "magic.", com[18](z-v) "set\_size\_and\_pinuse\_of\_\\inuse\_chunk(gm, p, nb);\\ \mbox{\rm //Requires $8|{\tt nb}$.}", jus(at-as) "Defn of \emph{topchunk}.";
+ribSO(aa) "\mrot{\emph{coalesced}(A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v{}\\{} \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\} \uplus  \{{\tt top}+2{\sf w}↦_{\sf u}{\tt topsize}-1{\sf w}\})}", ribSS[25](z) "\mrot{\pinuse{\tt p}{1}}", ribSS(au) "\mrot{\cinuse{\tt p}{1}}", ribSS(av) "\mrot{\size{\tt p}{\tt nb}}", ribOS(ae-ah), ribSO(at-as) "\emph{topchunk}(\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}-1{\sf w}\})", ribOS(d), ribOS(v), ribOS(k), ribOS(ar);
+jus(ae-z) "Re-insert $\pinuse{\tt p}{1}$.", jus(au-ar) "Defn of \emph{ablock}.";
+twist(ae,af,ai,aj,ak,al,ag,ah,ab,z)(z,ab,ae,af,ai,aj,ak,al,ag,ah);
+ribSS[13](au-ar) "\emph{ablock}({\tt p},{\tt top},\\\{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\})", ribSO(z) "\mrot{\pinuse{\tt start}{1}}", ribSS(ae-ah) "\emph{block}^*({\tt start},{\tt p}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v)";
+jus(ae-ar) "Extend \emph{block} sequence. (TODO: Does this require any additional facts?)";
+ribSS(ae-ar) "\emph{block}^*({\tt start},{\tt top}, A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\})", ribOS(z), ribOS[50](aa), ribOS(b);
+twist(aa,z)(z,aa);
+jus(b-ar) "Defn of \emph{arena}.";
+ribSS(b-ar) "\arena{A_{\sf a} \uplus (\biguplus_{i=0}^{64}．U_i)_{\sf u} \uplus v \uplus \{{\tt p}+2{\sf w}↦_{\sf a}\ceil[{\sf w}]{\tt bytes}\}}{\{{\tt top}+2{\sf w}↦_{\sf u} {\tt topsize}+{\tt nb}-1{\sf w}\}}", ribOS(e), ribOS(ay), ribOS(ac), ribOS(at-as);
+eshape sv;
+eshape su;
+jus(e-as) "Defn of \emph{state}.";
+ribSO(e-as) "\state{A\uplus\{{\tt p}+2{\sf w}↦\ceil[{\sf w}]{\tt bytes}\}}";
+
+
+
+
+dumpstate;
+
+\end{filecontents*}
+\makeribbonproof[malloc11.tex]{malloc12.tex}
+
+
+\end{document}

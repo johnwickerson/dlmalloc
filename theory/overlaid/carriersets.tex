@@ -1,0 +1,485 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{a4wide}
+\usepackage{JohnMath}
+
+\usepackage[svgnames]{xcolor}
+
+% CODE LISTINGS
+\usepackage{listings}
+\lstset{
+  language=C,
+  columns=[l]fullflexible,
+  mathescape=true,
+  basicstyle=\ttfamily\color{Black},
+  showstringspaces=false,
+  commentstyle=\color{DarkGreen}, 
+  numbers=none, 
+  escapechar=£,
+  escapebegin=\normalsize\rmfamily\color{Black}
+}
+
+% SPECIFICATIONS
+\newcommand{\ml}[2][t]{\mbox{\mdseries\begin{tabular}[#1]{@{}L@{}}#2\end{tabular}}}
+\newcommand{\ass}[1]{\ensuremath{{\color{blue}\left\{\ml[c]{#1}\right\}}}}
+\newcommand{\seqspec}[3]{\ass{#1}\,{\mbox{{\tt #2}}}\,\ass{#3}}
+\newcommand{\Seqspec}[3]{\multicolumn{2}{l}{$\ass{#1}$ {#2} $\ass{#3}$}}
+\newcommand{\comm}[1]{\vspace{-2pt}%
+    \begin{list}{/$*$}{%
+        \topsep=5pt%
+        \leftmargin=3cm%
+      }\item #1 \hfill$*$/\end{list}%
+}
+
+\renewcommand{\arraystretch}{1.2}
+
+\renewcommand{\true}{\mathsf{tt}}
+\renewcommand{\emp}{\emph{emp}}
+
+%\renewcommand{\boxed}[2][]{{\textbf{[}}#2{\textbf{]}}_{#1}}
+
+\newcommand{\rsem}[1]{{(\![}{#1}{]\!)}}
+
+\newcommand{\starstar}{\mathbin{\bar{*}}}
+\newcommand{\compcomp}{\mathbin{\bar{·}}}
+
+\newcommand{\defined}{\mathop{\text{defined}}}
+
+\newcommand{\SET}[2]{\left\{\begin{array}{@{}l|l@{}} #1 & #2 \end{array}\right\}}
+
+\newenvironment{mapping}{\left\{ \begin{array}{@{}r@{\,↦\,}l@{}}}{\end{array}\right\}}
+
+\title{GSep}
+\author{John Wickerson}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Preliminaries}
+
+\subsection{Spatial closure operators}
+Suppose $R$ and $S$ are of type $\emph{expr} → \emph{expr} → \emph{assertion}$. Define:
+\[
+\begin{array}{rcl}
+R;S &\eqdef& λx\,z．∃y．R\,x\,y ∧ S\,y\,z \\
+R ∨ S &\eqdef& λx\,y． R\,x\,y ∨ S\,x\,y \\
+\id &\eqdef& λx\, y
+．x=y ∧ \emp
+\end{array}
+\]
+
+\noindent Then let $R^*$ be the least function satisfying $R^* = \id ∨ (R;R^*)$ and let $R^+ = R;R^*$.
+
+\section{A singly-indexed list (no carrier set)}
+
+Our first datastructure is a singly-indexed list. Every node has a value and a pointer to the next node. The final node's next pointer is set to 0. The first node is a sentinel, at a fixed location $r$. Our datastructure can be described by the following formulae:
+\[
+\begin{array}{rcl}
+\emph{list}\,r &\iffdef & el^+\,r\,0 \\
+x ∈ \emph{list}\,r &\iffdef& el^+\,r\,x  *  el^+\,x\,0
+\end{array}
+\]
+where:
+\[
+el\,x\,y  =  x^1 \pto[.5] \underscore  *  x^2↦y
+\]
+
+\noindent Our datastructure provides two methods: insertion and deletion. These are implemented as follows.
+
+\begin{lstlisting}
+insert(x){
+  int* p = r;
+  while ([p+1]!=0 && ...) do p:=[p+1];
+  [x+1]:=[p+1];
+  [p+1]:=x;
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+remove(x){
+  int* p = r;
+  while ([p+1]!=x) do p:=[p+1];
+  [p+1]:=[x+1];
+}
+\end{lstlisting}
+
+\noindent We can specify these methods like so:
+\[
+\begin{array}{c}
+c{:}C ⊦ \seqspec{\boxed[c]{\emph{list}\,{\tt r}}  *  {\tt x}^1 ↦ v  *  {\tt x}^2 ↦ \underscore}{insert(x)}{\boxed[c]{{\tt x}∈\emph{list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v} \\
+c{:}C ⊦ \seqspec{\boxed[c]{{\tt x}∈\emph{list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v}{remove(x)}{\boxed[c]{\emph{list}\,{\tt r}}  *  {\tt x}^1 ↦ v  *  {\tt x}^2 ↦ \underscore}
+\end{array}
+\]
+
+\noindent The region $c$ denotes the module's internal state. Its interference, $C$, is as follows:
+\[
+\begin{array}{rcl}
+C &\eqdef& \bigcup_{x∈\mathbb N}\,\{\textsc{Add}\,x, \textsc{Rm}\,x\}
+\end{array}
+\]
+
+\noindent where:
+\[
+\begin{array}{l}
+{\sf action} \textsc{Add}\,x \\
+\left\lfloor\begin{array}{ll}
+{\sf pre} & p^2 ↦ p' \\
+{\sf post} & p^2 ↦ x * x^1\pto[.5] v * x^2↦p' \\
+{\sf context} & el^*\,r\,p \\
+\end{array}\right. \\ \\
+{\sf action} \textsc{Rm}\,x \\
+\left\lfloor\begin{array}{ll}
+{\sf pre} & p^2 ↦ x * x^1\pto[.5] v * x^2↦p' \\
+{\sf post} & p^2 ↦ p' \\
+{\sf context} & el^*\,r\,p \\
+{\sf guard} & x^1\pto[.5]\underscore
+\end{array}\right.
+\end{array}
+\]
+
+\noindent It is important to note that the pre- and post-conditions of {\tt insert} and {\tt remove} are stable under $C$. 
+
+\subsection{Verification of the {\tt insert} method}
+
+\begin{lstlisting}
+insert(x){
+  £\ass{\boxed[c]{\emph{list}\,{\tt r}} * {\tt x}^1 ↦ v * {\tt x}^2↦\underscore}£
+  // begin frame
+    £\ass{\boxed[c]{\emph{list}\,{\tt r}}}£
+    £\ass{\boxed[c]{el^+\,{\tt r}\,0}}£
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt r}  *  el^+\,{\tt r}\,0}}£
+    int* p = r; // using Hoare's assignment axiom
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * el^+\,{\tt p}\,0}}£
+    £\ass{∃p'．\boxed[c]{el^*\,{\tt r}\,{\tt p} * el\,{\tt p}\,p' * el^*\,p'\,0}}£
+    £\ass{∃p'．\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦p' * el^*\,p'\,0}}£
+    // begin existential
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦p' * el^*\,p'\,0}}£
+      int* t = [p+1]; // using RegRead axiom
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}}£
+    // end existential
+    £\ass{∃p'．\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}}£
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}}£
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * el\,{\tt p}\,{\tt t} * el^*\,{\tt t}\,0}}£
+    while (t!=0 && ...) do {
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * el\,{\tt p}\,{\tt t} * el^*\,{\tt t}\,0}  *  {\tt t}\dot{≠} 0}£
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt t} * el^*\,{\tt t}\,0}  *  {\tt t}\dot{≠} 0}£
+      £\ass{∃t'．\boxed[c]{el^*\,{\tt r}\,{\tt t} *  {\tt t}^1\pto[.5]\underscore  *  {\tt t}^2↦t'  * el^*\,t'\,0}}£
+      p:=t; // using Hoare's assignment axiom
+      £\ass{∃t'．\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦t'  * el^*\,t'\,0}}£
+      // begin existential
+        £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦t'  * el^*\,t'\,0}}£
+        t:=[p+1]; // using RegRead axiom
+        £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t}  * el^*\,{\tt t}\,0}}£
+      // end existential
+      £\ass{∃t'．\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t}  * el^*\,{\tt t}\,0}}£
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t}  * el^*\,{\tt t}\,0}}£
+    }
+  // end frame
+  £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1 \pto[.5]\underscore  * {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}  * {\tt x}^1 ↦ v * {\tt x}^2↦\underscore}£
+  // begin null action on region £$c$£
+    £\ass{{\tt x}^1 ↦ v * {\tt x}^2↦\underscore}£
+    [x+1]:=t;
+    £\ass{{\tt x}^1 ↦ v * {\tt x}^2↦{\tt t}}£
+  // end null action
+  £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1 \pto[.5]\underscore  * {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}  * {\tt x}^1 ↦ v * {\tt x}^2↦{\tt t}}£
+  // begin action £$\textsc{Add}\,{\tt x}$£ on region £$c$£
+    £\ass{{\tt p}^2↦{\tt t}  * {\tt x}^1 ↦ v * {\tt x}^2↦{\tt t}}£
+    [p+1]:=x;
+    £\ass{{\tt p}^2↦{\tt x}  * {\tt x}^1 \pto[.5] v * {\tt x}^2↦{\tt t}  * {\tt x}^1 \pto[.5] v}£
+  // end action
+  £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1 \pto[.5]\underscore  * {\tt p}^2↦{\tt x}  * {\tt x}^1 \pto[.5] v * {\tt x}^2↦{\tt t}  * el^*\,{\tt t}\,0}  * {\tt x}^1 \pto[.5] v}£
+  £\ass{\boxed[c]{el^+\,{\tt r}\,{\tt x} * el^+\,{\tt x}\,0}  *  {\tt x}^1\pto[.5]v}£
+  £\ass{\boxed[c]{{\tt x}∈\emph{list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v}£
+}
+
+\end{lstlisting}
+
+\section{A singly-indexed list (with carrier set)}
+
+\[
+\begin{array}{rcl}
+\emph{list}\,∅\,x  &\iffdef & x=0 ∧ \emp \\
+\emph{list}\,X\,x &\iffdef & x∈X ∧ ∃y．x^1\pto[.5] \underscore  *  x^2 ↦ y  *  \emph{list}\,(X-\{x\})\,y
+\end{array}
+\]
+
+\noindent Our datastructure provides two methods: insertion and deletion. These are implemented as follows.
+
+\begin{lstlisting}
+insert(x){
+  int* p = r;
+  while ([p+1]!=0 && ...) do p:=[p+1];
+  [x+1]:=[p+1];
+  [p+1]:=x;
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+remove(x){
+  int* p = r;
+  while ([p+1]!=x) do p:=[p+1];
+  [p+1]:=[x+1];
+}
+\end{lstlisting}
+
+\noindent We can specify these methods like so:
+\[
+\begin{array}{l}
+⊦ \seqspec{{\emph{list}\,(\{{\tt r}\} \uplus X)\,{\tt r}}  *  {\tt x} ↦ \underscore\,\underscore}{insert(x)}{{\emph{list}\,(\{{\tt r}\} \uplus \{{\tt x}\} \uplus X)\,{\tt r}}  *  {\tt x}^1\pto[.5]v} \\
+⊦ \seqspec{{\emph{list}\,(\{{\tt r}\}\uplus\{{\tt x}\} \uplus X)\,{\tt r}}  *  {\tt x}^1\pto[.5]v}{remove(x)}{{\emph{list}\,(\{{\tt r}\} \uplus X)\,{\tt r}}  * {\tt x} ↦ \underscore\,\underscore} \\
+\end{array}
+\]
+
+\noindent We can reason using this specification like so:
+
+\begin{lstlisting}
+£\ass{{\emph{list}\,\{{\tt r}\}\,{\tt r}}  *  {\tt x}↦\underscore\,\underscore  *  {\tt y}↦\underscore\,\underscore}£
+insert(r,x) // framing on £${\tt y}↦\underscore\,\underscore$£
+£\ass{{\emph{list}\,(\{{\tt r}\} \uplus \{{\tt x}\})\,{\tt r}}  *  {\tt y}↦\underscore\,\underscore}£
+insert(r,y)
+£\ass{{\emph{list}\,(\{{\tt r}\} \uplus \{{\tt x}\} \uplus \{{\tt y}\})\,{\tt r}}}£
+remove(r,x)
+£\ass{{\emph{list}\,(\{{\tt r}\} \uplus \{{\tt y}\})\,{\tt r}}  *  {\tt x}↦\underscore\,\underscore}£
+\end{lstlisting}
+
+
+
+\subsection{Verification of the {\tt insert} method}
+
+\begin{lstlisting}
+insert(x){
+  £\ass{\boxed[c]{\emph{list}\,(\{{\tt r}\} \uplus X)\,{\tt r}}  *  {\tt x}^1 ↦ v  *  {\tt x}^2 ↦ \underscore}£
+  // begin action £$\textsc{Add}_{\tt r}\,{\tt x}$£ on region £$c$£
+    £\ass{\boxed[c]{\emph{list}\,{\tt r}}}£
+    £\ass{\boxed[c]{el^+\,{\tt r}\,0}}£
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt r}  *  el^+\,{\tt r}\,0}}£
+    int* p = r; // using Hoare's assignment axiom
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * el^+\,{\tt p}\,0}}£
+    £\ass{∃p'．\boxed[c]{el^*\,{\tt r}\,{\tt p} * el\,{\tt p}\,p' * el^*\,p'\,0}}£
+    £\ass{∃p'．\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦p' * el^*\,p'\,0}}£
+    // begin existential
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦p' * el^*\,p'\,0}}£
+      int* t = [p+1]; // using RegRead axiom
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}}£
+    // end existential
+    £\ass{∃p'．\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}}£
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}}£
+    £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * el\,{\tt p}\,{\tt t} * el^*\,{\tt t}\,0}}£
+    while (t!=0 && ...) do {
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * el\,{\tt p}\,{\tt t} * el^*\,{\tt t}\,0}  *  {\tt t}\dot{≠} 0}£
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt t} * el^*\,{\tt t}\,0}  *  {\tt t}\dot{≠} 0}£
+      £\ass{∃t'．\boxed[c]{el^*\,{\tt r}\,{\tt t} *  {\tt t}^1\pto[.5]\underscore  *  {\tt t}^2↦t'  * el^*\,t'\,0}}£
+      p:=t; // using Hoare's assignment axiom
+      £\ass{∃t'．\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦t'  * el^*\,t'\,0}}£
+      // begin existential
+        £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦t'  * el^*\,t'\,0}}£
+        t:=[p+1]; // using RegRead axiom
+        £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t}  * el^*\,{\tt t}\,0}}£
+      // end existential
+      £\ass{∃t'．\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t}  * el^*\,{\tt t}\,0}}£
+      £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} *  {\tt p}^1\pto[.5]\underscore  *  {\tt p}^2↦{\tt t}  * el^*\,{\tt t}\,0}}£
+    }
+  // end frame
+  £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1 \pto[.5]\underscore  * {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}  * {\tt x}^1 ↦ v * {\tt x}^2↦\underscore}£
+  // begin null action on region £$c$£
+    £\ass{{\tt x}^1 ↦ v * {\tt x}^2↦\underscore}£
+    [x+1]:=t;
+    £\ass{{\tt x}^1 ↦ v * {\tt x}^2↦{\tt t}}£
+  // end null action
+  £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1 \pto[.5]\underscore  * {\tt p}^2↦{\tt t} * el^*\,{\tt t}\,0}  * {\tt x}^1 ↦ v * {\tt x}^2↦{\tt t}}£
+  // begin action £$\textsc{Add}\,{\tt x}$£ on region £$c$£
+    £\ass{{\tt p}^2↦{\tt t}  * {\tt x}^1 ↦ v * {\tt x}^2↦{\tt t}}£
+    [p+1]:=x;
+    £\ass{{\tt p}^2↦{\tt x}  * {\tt x}^1 \pto[.5] v * {\tt x}^2↦{\tt t}  * {\tt x}^1 \pto[.5] v}£
+  // end action
+  £\ass{\boxed[c]{el^*\,{\tt r}\,{\tt p} * {\tt p}^1 \pto[.5]\underscore  * {\tt p}^2↦{\tt x}  * {\tt x}^1 \pto[.5] v * {\tt x}^2↦{\tt t}  * el^*\,{\tt t}\,0}  * {\tt x}^1 \pto[.5] v}£
+  £\ass{\boxed[c]{el^+\,{\tt r}\,{\tt x} * el^+\,{\tt x}\,0}  *  {\tt x}^1\pto[.5]v}£
+  £\ass{\boxed[c]{{\tt x}∈\emph{list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v}£
+}
+
+\end{lstlisting}
+
+
+\section{Doubly-linked list}
+
+\newcommand{\elhat}[2]{\widehat{el}_{#1, #2}}
+\newcommand{\Add}[1]{\textsc{Add}_{#1}}
+\newcommand{\Rm}[1]{\textsc{Rm}_{#1}}
+
+
+We propose to describe the datastructure in a very different way. We shall see it as two \emph{separate} lists (that is, we will use separating conjunction where previously we had ordinary conjunction). But in order to preserve the close relationship between the two lists (namely, that every node appearing in one list also appears in the other) we shall use `ghost pointers', which map each element of one list to its counterpart in the other list. Here is our first attempt:
+\[
+\begin{array}{rcl}
+\emph{2list}\, r &\iffdef& \N a．\N b．\boxed[a]{\elhat br^+\,r\,0} *  \boxed[b]{\elhat ar^+\,r\,0} \\
+x∈\emph{2list}\,r &\iffdef& \N a．\N b．\boxed[a]{\elhat br^+\,r\,x  *  \elhat br^+\,x\,0} *  \boxed[b]{\elhat ar^+\,r\,x  *  \elhat ar^+\,x\,0}
+\end{array}
+\]
+where:
+\[
+\begin{array}{rcl}
+el_0\,x\,y &\iffdef& x^1 \pto[.25] \underscore  *  x^2↦y \\
+el_1\,x\,y &\iffdef& x^1 \pto[.25] \underscore  *  x^3↦y
+\end{array}
+\]
+and:
+\[
+\begin{array}{rcl}
+in_{a,r}\,x &\iffdef& \boxed[a]{el_0^*\,r\,x  *  \true} \\
+in_{b,r}\,x &\iffdef& \boxed[b]{el_1^*\,r\,x  *  \true}
+\end{array}
+\]
+and:
+\[
+\begin{array}{rcl}
+\elhat br\,x\,y &\iffdef& el_0\,x\,y  *  in_{b,r}\,x \\
+\elhat ar\,x\,y &\iffdef& el_1\,x\,y  *  in_{a,r}\,x
+\end{array}
+\]
+
+\noindent The predicate $\elhat br$ describes an element that appears in the first list. It uses the $in_{b,r}$ predicate to specify that the element appears in the second list too. From this and the symmetric fact about $\elhat ar$, we can deduce that the two lists pass through exactly the same set of elements.
+
+We specify the insert and remove methods in the same way as before (but now with the new implementation of the $\emph{2list}$ predicate):
+\[
+\begin{array}{c}
+c{:}C_{\tt r} ⊦ \seqspec{\boxed[c]{\emph{2list}\,{\tt r}}  *  {\tt x}^1 ↦ v  *  {\tt x}^2 ↦ \underscore  *  {\tt x}^3 ↦ \underscore}{insert(x)}{\boxed[c]{{\tt x}∈\emph{2list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v} \\
+c{:}C_{\tt r} ⊦ \seqspec{\boxed[c]{{\tt x}∈\emph{2list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v}{remove(x)}{\boxed[c]{\emph{2list}\,{\tt r}}  *  {\tt x}^1 ↦ v  *  {\tt x}^2 ↦ \underscore  *  {\tt x}^3 ↦ \underscore}
+\end{array}
+\]
+
+\noindent where
+\[
+C_r \eqdef \bigcup_{x∈\mathbb N}\,\{\Add{r}\,x, \Rm{r}\,x\}
+\]
+
+\noindent and
+\[
+\begin{array}{l}
+{\sf action} \Add r\,x \\
+\left\lfloor\begin{array}{ll}
+{\sf pre} & p^2 ↦ p'  *  q^3↦q' \\
+{\sf post} & p^2 ↦ x  *  q^3 ↦ x  * x^1\pto[.5] v  * x^2↦p'  *  x^3 ↦ q' \\
+{\sf context} & el_0^*\,r\,p  *  el_1^*\,r\,q
+\end{array}\right. \\ \\
+{\sf action} \Rm r\,x \\
+\left\lfloor\begin{array}{ll}
+{\sf pre} & p^2 ↦ x  *  q^3 ↦ x  * x^1\pto[.5] v * x^2↦p'  *  x^3 ↦ q' \\
+{\sf post} & p^2 ↦ p'  *  q^3↦q' \\
+{\sf context} & el_0^*\,r\,p  *  el_1^*\,r\,q \\
+{\sf guard} & x^1\pto[.5]v
+\end{array}\right.
+\end{array}
+\]
+
+\subsection{Verifying the {\tt insert} method}
+
+\begin{lstlisting}
+£\ass{\boxed[c]{\emph{2list}\,{\tt r}}  *  {\tt x}^1 ↦ v  *  {\tt x}^2 ↦ \underscore  *  {\tt x}^3 ↦ \underscore}£
+insert(x){
+  // begin frame
+    £\ass{\boxed[c]{\emph{2list}\,{\tt r}}  *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ \underscore  *  {\tt x}^3 ↦ \underscore}£
+    // begin frame
+      £\ass{\boxed[c]{\emph{2list}\,{\tt r}}}£
+      £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^+\,{\tt r}\,0}  *  \boxed[b]{\elhat a{\tt r}^+\,{\tt r}\,0}}}£
+      £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt r}  *  \elhat b{\tt r}^+\,{\tt r}\,0}  *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt r}  *  \elhat a{\tt r}^+\,{\tt r}\,0}}}£
+      int* p = r;
+      int* q = r;
+      £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p}  *  \elhat b{\tt r}^+\,{\tt p}\,0}  *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q}  *  \elhat a{\tt r}^+\,{\tt q}\,0}}}£
+      £\ass{∃p'\,q'．\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,p'  *  \elhat b{\tt r}^+\,p'\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,q'  *  \elhat a{\tt r}^+\,q'\,0}}}£
+      int* t = [p+1];
+      int* u = [q+2];
+      £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}}£
+      while (t!=0 && ...) do { p:=t; t:=[p+1]; }
+      while (u!=0 && ...) do { q:=u; u:=[q+2]; }
+      £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}}£
+    // end frame
+    £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}} \\
+ *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ \underscore  *  {\tt x}^3 ↦ \underscore}£
+    [x+1]:=t;
+    [x+2]:=u;
+    £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}} \\ 
+ *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ {\tt t}  *  {\tt x}^3 ↦ {\tt u}}£
+    £\ass{\boxed[c]{\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}} \\ 
+ *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ {\tt t}  *  {\tt x}^3 ↦ {\tt u}}£
+    £\ass{\boxed[c] {el_0\,{\tt p}\,{\tt t}  *  el_1\,{\tt q}\,{\tt u}  *  \\ 
+\left(\ml[c]{ el_0\,{\tt p}\,{\tt t}  *  el_1\,{\tt q}\,{\tt u}  \magicwand  \\
+\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}\right)} \\
+ *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ {\tt t}  *  {\tt x}^3 ↦ {\tt u}}£
+    // tricky step (see below) 
+    £\ass{\boxed[c] {
+el_0\,{\tt p}\,{\tt t}  *  el_1\,{\tt q}\,{\tt u}  *  \\ 
+\left(\ml[c]{ el_0\,{\tt p}\,{\tt x}  *  el_0\,{\tt x}\,{\tt t}  *  el_1\,{\tt q}\,{\tt x}  *  el_1\,{\tt x}\,{\tt u}   \magicwand  \\
+\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt x}  *  \elhat b{\tt r}\,{\tt x}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt x}  *  \elhat a{\tt r}\,{\tt x}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}\right)} \\
+ *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ {\tt t}  *  {\tt x}^3 ↦ {\tt u}}£
+    // begin action £$\Add{\tt r}\,{\tt x}$£ on region £$c$£
+      £\ass{el_0\,{\tt p}\,{\tt t}  *  el_1\,{\tt q}\,{\tt u}  *  {\tt x}^1 \pto[.5] v * {\tt x}^2↦{\tt t} * {\tt x}^3↦{\tt u}}£
+      [p+1]:=x;
+      [q+2]:=x;
+      £\ass{el_0\,{\tt p}\,{\tt x}  *  el_1\,{\tt q}\,{\tt x}  *  {\tt x}^1 \pto[.5] v * {\tt x}^2↦{\tt t} * {\tt x}^3↦{\tt u}}£
+      £\ass{el_0\,{\tt p}\,{\tt x}  *  el_0\,{\tt x}\,{\tt t}  *  el_1\,{\tt q}\,{\tt x}  *  el_1\,{\tt x}\,{\tt u}}£
+    // end action
+    £\ass{\boxed[c] {
+el_0\,{\tt p}\,{\tt x}  *  el_0\,{\tt x}\,{\tt t}  *  el_1\,{\tt q}\,{\tt x}  *  el_1\,{\tt x}\,{\tt u} *  \\ 
+\left(\ml[c]{ el_0\,{\tt p}\,{\tt x}  *  el_0\,{\tt x}\,{\tt t}  *  el_1\,{\tt q}\,{\tt x}  *  el_1\,{\tt x}\,{\tt u}   \magicwand  \\
+\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt x}  *  \elhat b{\tt r}^n\,{\tt x}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt x}  *  \elhat a{\tt r}^n\,{\tt x}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}\right)} \\
+ *  {\tt x}^1 \pto[.5] v  *  {\tt x}^2 ↦ {\tt t}  *  {\tt x}^3 ↦ {\tt u}}£
+    £\ass{\boxed[c] {\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt x}  *  \elhat b{\tt r}\,{\tt x}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt x}  *  \elhat a{\tt r}^n\,{\tt x}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}}£
+    £\ass{\boxed[c]{{\tt x}∈\emph{2list}\,{\tt r}}}£
+  // end frame
+}
+£\ass{\boxed[c]{{\tt x}∈\emph{2list}\,{\tt r}}  *  {\tt x}^1\pto[.5]v}£
+
+\end{lstlisting}
+
+\noindent The tricky step requires us to show that:
+\[
+\ml[c]{el_0\,{\tt p}\,{\tt t}  *  el_1\,{\tt q}\,{\tt u}  \magicwand  \\
+\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}
+\]
+implies
+\[
+\ml[c]{ el_0\,{\tt p}\,{\tt x}  *  el_0\,{\tt x}\,{\tt t}  *  el_1\,{\tt q}\,{\tt x}  *  el_1\,{\tt x}\,{\tt u}   \magicwand  \\
+\N a．\N b．\boxed[a]{\elhat b{\tt r}^*\,{\tt r}\,{\tt p} 
+ *  \elhat b{\tt r}\,{\tt p}\,{\tt x}  *  \elhat b{\tt r}\,{\tt x}\,{\tt t}  *  \elhat b{\tt r}^+\,{\tt t}\,0} \\ 
+ *  \boxed[b]{\elhat a{\tt r}^*\,{\tt r}\,{\tt q} 
+ *  \elhat a{\tt r}\,{\tt q}\,{\tt x}  *  \elhat a{\tt r}\,{\tt x}\,{\tt u}  *  \elhat a{\tt r}^+\,{\tt u}\,0}}
+\]
+
+\noindent That is, if we are obliged to provide length-1 chains from {\tt p} to {\tt t} and from {\tt q} to {\tt u}, then it suffices for us to provide length-2 chains from {\tt p} to {\tt x} to {\tt t} and from {\tt q} to {\tt x} to {\tt u}, and the resultant list will be duly extended by 1.
+
+
+
+\end{document}

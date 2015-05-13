@@ -1,0 +1,142 @@
+#define testbusy(p) ((int)(p)&1)
+#define setbusy(p) (struct store *)((int)(p)|1)
+#define clearbusy(p) (struct store *)((int)(p)&~1)
+
+struct store {struct store *ptr;};
+static struct store *s; //arena start
+static struct store *t; //arena top
+
+£\ass{\emph{arena}}£
+£\ass{\boxed{∃ b>\t． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b)} }£
+char *malloc(unsigned int nbytes) {
+  register struct store *p, *q;
+  register nw;
+  static temp;
+  //omitted: code to initialise arena
+  nw=(nbytes+WORD+WORD-1)/WORD; //where WORD=sizeof(struct store)
+  £\ass{\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw} \text{ \rm where $P_\nw \eqdef \nw=1+\mathceil{\frac{\nbytes}{\WORD}}$}£
+  for(p=s; ; ) { 
+    £\ass{\boxed{∃ b． \true * \ls[\s]{\p} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw}£ 
+    for(temp=0; ; ) {
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\p} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw}£ 
+      if(!testbusy(p->ptr)) {
+        £\ass{\boxed{∃ q,b． \true * \ls[\s]{\p} \U{q} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw}£ 
+	while(!testbusy((q=p->ptr)->ptr)) {
+          £\ass{\boxed{∃ r,b． \true * \ls[\s]{\p} \U{\q} \U{r} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw}£ 
+	  p->ptr = q->ptr; //coalesce consecutive free blocks
+          £\ass{\boxed{∃ r,b． \true * \ls[\s]{\p} \U{r} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw}£ 
+	}
+        £\ass{\boxed{∃ b． \true * \ls[\s]{\p} \U{\q} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw}£ 
+	if(q>=p+nw && p+nw>=p) {
+          £\ass{\boxed{∃ b． \true * \ls[\s]{\p}  \U{\q}  \ls{\t} * \E{\t}{\s} ∧ \brk(b) ∧ \t<b } \n ∧ P_\nw ∧ \q{\geq}\p+\nw ∧ \p+\nw{\geq}\p}£  
+	  goto found;
+        } 
+      }
+      //p's block is either allocated or too small
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\p} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw}£ 
+      q = p;
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\q} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw ∧ \q=\p}£
+      p = clearbusy(p->ptr);
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\q}  \B{\p} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw {} \\[1pt] {}
+      ∨ \boxed{∃ b ． \true * \ls[\s]{\q} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw ∧ \q=\t ∧ \p=\s }£
+      if(p>q) {
+        £\ass{\boxed{∃ b． \true * \ls[\s]{\q} \B{\p} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw }£
+      } else if(q!=t || p!=s) {
+        £\ass{\boxed{∃ b ． \true * \ls[\s]{\q} * \E{\t}{\s} * \brk(b) ∧ \t<b} \n ∧ P_\nw ∧ \q=\t ∧ \p=\s ∧ (\q{\neq}\t ∨ \p{\neq}\s)}£
+	return 0;
+        £\ass{\false}£
+      } else if(++temp>1) {
+        £\ass{\boxed{∃ b ． \true * \ls[\s]{\q} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw ∧ \q=\t ∧ \p=\s }£
+	break;
+      }      
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\p} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw }£
+    }
+    £\ass{\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw }£
+    temp = ((nw+BLOCK/WORD)/(BLOCK/WORD))*(BLOCK/WORD); 
+                                      //where BLOCK defaults to 1024
+    £\ass{\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} \n ∧ P_\nw ∧ P_\temp } \text{ \rm where $P_\temp \eqdef \temp{>}\nw$}£
+    q = (struct store *)sbrk(0);
+    £\ass{∃ b．\boxed{\true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw ∧ P_\temp ∧ \q=b }£
+    if(q+temp < q) {
+      return 0;
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ \ret=0}£
+    }
+    £\ass{∃ b．\boxed{\true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw ∧ P_\temp ∧ \q=b }£
+    q = (struct store *)sbrk(temp * WORD);
+    £\ass{\boxed{∃ b ． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} ∧ P_\nw ∧ P_\temp ∧ \q={-1} {} \\[1pt] {}
+    ∨ ∃ b．\boxed{\true * \ls[\s]{\t} * \E{\t}{\s} * \iterstar{0≤ i<\temp} (b+i)↦\underscore \n 
+    * \brk(b+\temp) ∧ \t<b} ∧ P_\nw ∧ P_\temp ∧ \q=b }£
+    if((INT)q == -1) {
+      £\ass{\boxed{∃ b ． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw ∧ P_\temp ∧ \q={-1}}£
+      return 0;
+      £\ass{\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ \ret=0}£
+    }
+    £\ass{\boxed{\true * \ls[\s]{\t} * \E{\t}{\s} * \iterstar{0≤ i<\temp} (\q+i)↦\underscore \n
+    * \brk(\q+\temp) ∧ \t<\q} ∧ P_\nw ∧ P_\temp}£
+    t->ptr = q;
+    £\ass{\boxed{\true * \ls[\s]{\t} * \t↦\q * \iterstar{0≤ i<\temp} (\q+i)↦\underscore \n
+    * \brk(\q+\temp) ∧ \t<\q} ∧ P_\nw ∧ P_\temp }£
+    if(q!=t+1) {
+      £\ass{\boxed{\true * \ls[\s]{\t} * \t↦\q * \iterstar{0≤ i<\temp} (\q+i)↦\underscore \n
+      * \brk(\q+\temp) ∧ \t+1<\q} ∧ P_\nw ∧ P_\temp }£
+      t->ptr = setbusy(t->ptr);
+      £\ass{\boxed{\true * \ls[\s]{\t} * \t_{\mid 1}↦\q * \iterstar{0≤ i<\temp} (\q+i)↦\underscore \n
+      * \brk(\q+\temp) ∧ \t+1<\q} ∧ P_\nw ∧ P_\temp }£
+      //lose half a pointer here - `true' absorbs it
+      £\ass{\boxed{\true * \ls[\s]{\t}  \A{\q} * \iterstar{0≤ i<\temp} (\q+i)↦\underscore \n
+      * \brk(\q+\temp) ∧ \t+1<\q} ∧ P_\nw ∧ P_\temp }£
+    }
+    £\ass{\boxed{\true * \ls[\s]{\t}  \B{\q} * \iterstar{0≤ i<\temp} (\q+i)↦\underscore * \brk(\q+\temp)}∧ P_\nw ∧ P_\temp }£
+    t = q->ptr = q+temp-1;
+    £\ass{\boxed{∃ u． \true * \ls[\s]{u}  \B{\q} * \q↦\t * \iterstar{\q<i≤ \t} i↦\underscore  * \brk(\t+1) ∧ \q<\t} ∧ P_\nw }£
+    //make new unallocated block
+    £\ass{\boxed{∃ u． \true * \ls[\s]{u}  \B{\q}  \U{\t} * \brk(\t+1) * \t↦\underscore } ∧ P_\nw}£
+    t->ptr = setbusy(s);
+    £\ass{\boxed{∃ u． \true * \ls[\s]{u}  \B{\q}  \U{\t} * \E{\t}{\s} * \brk(\t+1) } ∧ P_\nw}£
+    //restore loop invariant
+    £\ass{\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw}£
+  }
+ found:
+  £\ass{\boxed{∃ b． \true * \ls[\s]{\p}  \U{\q}  \ls{\t} * \E{\t}{\s} * \brk(b)∧ \t<b } ∧ P_\nw ∧ \q{\geq}\p+\nw ∧ \p+\nw{\geq}\p}£  
+  if(q>p+nw) {
+    (p+nw)->ptr = p->ptr;
+    £\ass{\boxed{∃ b． \true * \ls[\s]{\p} * \p↦\q * \iterstar{0<i<\nw} (\p+i)↦\underscore \n
+    * \U[(\p+\nw)]{\q} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw ∧ \q{>}\p+\nw ∧ \p+\nw{\geq}\p}£
+    £\ass{\boxed{∃ b． \true * \ls[\s]{\p} * \p↦\q * \iterstar{0<i<\nw} (\p+i)↦\underscore \n
+    * \ls[(\p+\nw)]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ P_\nw ∧ \q{>}\p+\nw ∧ \p+\nw{\geq}\p}£
+  } 
+  p->ptr = setbusy(p+nw);
+  £\ass{\boxed{∃ b． \true * \ls[\s]{\p} \A{(\p+\nw)}
+\ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b} {} \\[3pt] \hfill {}
+  * \iterstar{0<i<\nw} (\p+i)↦\underscore * \p_{\mid 1}\pto[.5](\p+\nw) ∧ P_\nw}£
+  return((char *)(p+1));
+  £\ass{∃ p,\mathit{nw}． \boxed{∃ b． \true * \ls[\s]{p} \A{(p+\mathit{nw})} \ls{\t} *
+  \E{\t}{\s} * \brk(b) ∧ \t<b } {} \\[3pt] \hfill {}
+  * \iterstar{0<i<\nw} (\p+i)↦\underscore * p_{\mid 1}\pto[.5](p+\mathit{nw}) \n
+  ∧ (\mathit{nw}{-}1)=\mathceil{\nbytes/\WORD} ∧ \ret=p+1}£
+}
+£\ass{(∃ p,\mathit{nw}． \boxed{∃ b． \true * \ls[\s]{p} \A{(p+\mathit{nw})} \ls{\t} *
+\E{\t}{\s} * \brk(b) ∧ \t<b } {} \\[3pt] \hfill {}
+* \iterstar{0<i<\mathit{nw}} (p+i)↦\underscore * p_{\mid 1}\pto[.5](p+\mathit{nw}) \n
+∧ (\mathit{nw}{-}1)=\mathceil{\nbytes/\WORD} ∧ \ret=p+1) \n
+∨\boxed{∃ b． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b } ∧ \ret=0}£
+£\ass{\left(\begin{array}{@{}c@{}}\arena  *  \token(\ret,\mathceil{\nbytes/\WORD}) \n *  \iterstar[\mathceil{\nbytes/\WORD}{-}1]{i=0}．\ret+i↦\underscore\end{array}\right) ∨ \arena ∧ \ret=0}£
+
+
+
+
+£\ass{\arena *  ∃\mathit{nw}．\token(\ap,\mathit{nw}) * \iterstar{0≤ i<\mathit{nw}} (\ap+i)↦\underscore}£
+£\ass{∃ p, q, \mathit{nw}． \boxed{∃ b > \t． \true * \ls[\s]{p}  \A{q} \ls{\t} * \E{\t}{\s} * \brk(b)} {} \\[3pt] \hfill {} * \iterstar{0≤ i<\mathit{nw}} (\ap+i)↦\underscore * p_{\mid 1}\pto[.5] q ∧ p=\ap{-}1 ∧ q=\ap+\mathit{nw}}£
+free(register char *ap) {
+  register struct store *p = (struct store *)ap;
+  --p;
+  £\ass{∃ q, \mathit{nw} ． \boxed{∃ b ． \true * \ls[\s]{\p}  \A{q} \ls{\t} * \E{\t}{\s}  * \brk(b) ∧ \t<b} {} \\[3pt] \hfill {} * \iterstar{0<i<\mathit{nw}} (\p+i)↦\underscore * p_{\mid 1}\pto[.5] q ∧ q=\p+\mathit{nw}+1}£
+  £\ass{\boxed{∃ q,b． \true * \ls[\s]{\p} * \p_{\mid 1}↦ q * \iterstar{\p<i<q} i↦\underscore \n
+  * \ls[q]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b ∧ \p<q}}£
+  p->ptr = clearbusy(p->ptr);
+  £\ass{\boxed{∃ q,b． \true * \ls[\s]{\p} * \p↦q * \iterstar{\p<i<q} i↦\underscore \n
+  * \ls[q]{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b ∧ \p<q}}£
+  £\ass{\boxed{∃ q,b． \true * \ls[\s]{\p}  \U{q} \ls{\t} * \E{\t}{\s} * \brk(b) ∧ \t<b}}£
+}
+£\ass{\boxed{∃ b > \t． \true * \ls[\s]{\t} * \E{\t}{\s} * \brk(b)}}£
+£\ass{\arena}£
